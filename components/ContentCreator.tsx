@@ -26,14 +26,12 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({ onSave, onCancel, langu
     setIsProcessing(true);
 
     if (containsChinese(inputText)) {
-      // Step 1: Generate English Material from Chinese Instructions
       const material = await generateEnglishMaterial(inputText);
       if (material) {
         setGeneratedMaterial(material);
         setStep('materialPreview');
       }
     } else {
-      // Step 1: Directly disassemble English text
       await performDisassembly(inputText);
     }
     setIsProcessing(false);
@@ -43,11 +41,13 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({ onSave, onCancel, langu
     setIsProcessing(true);
     const result = await disassembleText(text);
     if (result) {
+      const timestamp = Date.now();
       setPreviewDeck({
         ...result,
+        sourceText: text, // 记录原始文本
         cards: result.cards.map((c: any, i: number) => ({
           ...c,
-          id: crypto.randomUUID(),
+          id: `${timestamp}-${String(i).padStart(4, '0')}`,
           audioUrl: '#'
         }))
       });
@@ -63,6 +63,7 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({ onSave, onCancel, langu
       title: previewDeck.title || 'Untitled Deck',
       description: previewDeck.description || '',
       icon: previewDeck.icon || '📝',
+      sourceText: previewDeck.sourceText || '', // 确保 sourceText 被存入
       cards: (previewDeck.cards || []) as Card[],
       createdAt: Date.now()
     };
@@ -208,7 +209,7 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({ onSave, onCancel, langu
               <h3 className="text-[10px] font-black text-gray-300 uppercase tracking-widest ml-1">Card List Preview</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {previewDeck.cards?.map((card: any, i: number) => (
-                  <div key={i} className="p-6 bg-white border border-gray-50 rounded-2xl hover:border-blue-100 transition-all flex flex-col">
+                  <div key={card.id} className="p-6 bg-white border border-gray-50 rounded-2xl hover:border-blue-100 transition-all flex flex-col">
                     <div className="flex justify-between items-start mb-2">
                       <p className="text-sm font-bold text-gray-800 leading-snug">{card.text}</p>
                       <span className="text-[9px] font-bold text-gray-200">#{i + 1}</span>

@@ -31,6 +31,22 @@ const encodeBase64 = (bytes: Uint8Array): string => {
 };
 
 /**
+ * Exponential Backoff Retry Utility for Gemini API
+ */
+async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
+  try {
+    return await fn();
+  } catch (error: any) {
+    if (retries > 0 && error?.status === 429) {
+      console.warn(`Rate limit reached. Retrying in ${delay}ms... (${retries} retries left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return callWithRetry(fn, retries - 1, delay * 2);
+    }
+    throw error;
+  }
+}
+
+/**
  * Encodes raw PCM (Int16) data to MP3 using global lamejs
  */
 const pcmToMp3 = (pcmData: Int16Array, sampleRate: number = 24000): Uint8Array => {
@@ -39,11 +55,8 @@ const pcmToMp3 = (pcmData: Int16Array, sampleRate: number = 24000): Uint8Array =
     throw new Error("Lamejs library not loaded");
   }
 
-  // Mono (1), SampleRate, Bitrate (64kbps)
   const mp3encoder = new lame.Mp3Encoder(1, sampleRate, 64);
   const mp3Data: Uint8Array[] = [];
-  
-  // Use recommended sample block size
   const sampleBlockSize = 576; 
   for (let i = 0; i < pcmData.length; i += sampleBlockSize) {
     const sampleChunk = pcmData.subarray(i, i + sampleBlockSize);
@@ -52,12 +65,10 @@ const pcmToMp3 = (pcmData: Int16Array, sampleRate: number = 24000): Uint8Array =
       mp3Data.push(new Uint8Array(mp3buf));
     }
   }
-  
   const mp3buf = mp3encoder.flush();
   if (mp3buf.length > 0) {
     mp3Data.push(new Uint8Array(mp3buf));
   }
-  
   const totalLength = mp3Data.reduce((acc, curr) => acc + curr.length, 0);
   const result = new Uint8Array(totalLength);
   let offset = 0;
@@ -81,10 +92,8 @@ export const stopAllAudio = () => {
 
 export const playAudio = async (url: string, playbackRate: number = 1.0) => {
   if (!url || url === '#') return;
-  
   stopAllAudio();
 
-  // Standard play for MP3/WAV/AAC URLs
   if (url.startsWith('http') || url.startsWith('data:audio/')) {
     activeAudioElement = new Audio(url);
     activeAudioElement.playbackRate = playbackRate;
@@ -94,7 +103,6 @@ export const playAudio = async (url: string, playbackRate: number = 1.0) => {
     });
   }
 
-  // Fallback for raw PCM (legacy)
   const base64Content = url.includes(',') ? url.split(',')[1] : url;
   try {
     if (!activeContext) {
@@ -126,28 +134,25 @@ export const playAudio = async (url: string, playbackRate: number = 1.0) => {
 };
 
 export const generateEnglishMaterial = async (prompt: string): Promise<string | null> => {
-  try {
+  return callWithRetry(async () => {
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: [{ parts: [{ text: `Instruction: ${prompt}` }] }],
       config: {
-        systemInstruction: "You are an English language curriculum designer. Based on the user's Chinese instructions, write a coherent, natural, and educational English text (story, article, or dialogue). The length must be under 300 words. Provide ONLY the English text without any intro or outro.",
+        systemInstruction: "You are an English language curriculum designer. Write a natural, educational English text under 300 words. Provide ONLY the English text.",
       }
     });
     return response.text || null;
-  } catch (error) {
-    console.error("Material generation failed:", error);
-    return null;
-  }
+  });
 };
 
 export const analyzeSentence = async (sentence: string) => {
-  try {
+  return callWithRetry(async () => {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [{ parts: [{ text: `Sentence to analyze: "${sentence}"` }] }],
       config: {
-        systemInstruction: "You are a professional language tutor. Analyze sentences and provide structured feedback for learners in CHINESE. All meanings, grammar notes, and context explanations must be in Chinese.",
+        systemInstruction: "You are a professional language tutor. Analyze sentences and provide structured feedback for learners in CHINESE.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -159,50 +164,46 @@ export const analyzeSentence = async (sentence: string) => {
                 properties: {
                   word: { type: Type.STRING },
                   phonetic: { type: Type.STRING },
-                  meaning: { type: Type.STRING, description: "Meaning of the word in Chinese" },
-                  role: { type: Type.STRING, description: "Grammatical role in Chinese (e.g., 名词, 动词)" }
+                  meaning: { type: Type.STRING },
+                  role: { type: Type.STRING }
                 },
                 required: ["word", "phonetic", "meaning", "role"]
               }
             },
-            grammarNote: { type: Type.STRING, description: "Detailed grammar explanation in Chinese" },
-            context: { type: Type.STRING, description: "Usage context or cultural nuance in Chinese" }
+            grammarNote: { type: Type.STRING },
+            context: { type: Type.STRING }
           },
-          required: ["breakdown", "grammarNote", "context"],
-          propertyOrdering: ["breakdown", "grammarNote", "context"]
+          required: ["breakdown", "grammarNote", "context"]
         }
       }
     });
     return JSON.parse(response.text || "{}");
-  } catch (error) {
-    console.error("Gemini analysis failed:", error);
-    return null;
-  }
+  });
 };
 
 export const disassembleText = async (rawText: string) => {
-  try {
+  return callWithRetry(async () => {
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: [{ parts: [{ text: `Text to disassemble: "${rawText}"` }] }],
       config: {
-        systemInstruction: "You are a meticulous language teacher. Your task is to transform the provided text into a comprehensive learning deck. CRITICAL REQUIREMENT: You must process the ENTIRE input text. Do NOT summarize, skip, or omit any sentences or meaningful segments. Every single sentence from the original text must be represented as an individual card in the 'cards' array. Ensure the cards follow the original chronological flow of the text. All translations, meanings, grammar notes, and descriptions MUST be in CHINESE.",
+        systemInstruction: "You are a meticulous language teacher. Disassemble text into a comprehensive learning deck with cards in CHINESE.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            title: { type: Type.STRING, description: "Title of the deck in Chinese" },
-            description: { type: Type.STRING, description: "Brief description in Chinese" },
-            icon: { type: Type.STRING, description: "A relevant emoji icon" },
+            title: { type: Type.STRING },
+            description: { type: Type.STRING },
+            icon: { type: Type.STRING },
             cards: {
               type: Type.ARRAY,
               items: {
                 type: Type.OBJECT,
                 properties: {
-                  text: { type: Type.STRING, description: "The original foreign language text" },
-                  translation: { type: Type.STRING, description: "The Chinese translation of the sentence" },
-                  grammarNote: { type: Type.STRING, description: "Grammar point explanation in Chinese" },
-                  context: { type: Type.STRING, description: "Contextual explanation in Chinese" },
+                  text: { type: Type.STRING },
+                  translation: { type: Type.STRING },
+                  grammarNote: { type: Type.STRING },
+                  context: { type: Type.STRING },
                   breakdown: {
                     type: Type.ARRAY,
                     items: {
@@ -210,8 +211,8 @@ export const disassembleText = async (rawText: string) => {
                       properties: {
                         word: { type: Type.STRING },
                         phonetic: { type: Type.STRING },
-                        meaning: { type: Type.STRING, description: "Word meaning in Chinese" },
-                        role: { type: Type.STRING, description: "Part of speech in Chinese" }
+                        meaning: { type: Type.STRING },
+                        role: { type: Type.STRING }
                       },
                       required: ["word", "phonetic", "meaning", "role"]
                     }
@@ -221,20 +222,16 @@ export const disassembleText = async (rawText: string) => {
               }
             }
           },
-          required: ["title", "description", "icon", "cards"],
-          propertyOrdering: ["title", "description", "icon", "cards"]
+          required: ["title", "description", "icon", "cards"]
         }
       }
     });
     return JSON.parse(response.text || "{}");
-  } catch (error) {
-    console.error("Disassembly failed:", error);
-    return null;
-  }
+  });
 };
 
-export const generateAudio = async (text: string, voiceName: string = 'Kore'): Promise<string | null> => {
-  try {
+export const generateAudio = async (text: string, voiceName: string = 'Kore'): Promise<{ url: string, duration: number } | null> => {
+  return callWithRetry(async () => {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: `Say clearly: ${text}` }] }],
@@ -252,16 +249,15 @@ export const generateAudio = async (text: string, voiceName: string = 'Kore'): P
     if (!pcmBase64) return null;
 
     const pcmBytes = decodeBase64(pcmBase64);
-    // Gemini output is usually 16-bit PCM at 24kHz
     const pcmInt16 = new Int16Array(pcmBytes.buffer, pcmBytes.byteOffset, pcmBytes.byteLength / 2);
+    const duration = pcmInt16.length / 24000;
     
-    // Encode to MP3 using global lamejs
     const mp3Bytes = pcmToMp3(pcmInt16, 24000);
     const mp3Base64 = encodeBase64(mp3Bytes);
 
-    return `data:audio/mpeg;base64,${mp3Base64}`;
-  } catch (error) {
-    console.error("Audio generation failed:", error);
-    return null;
-  }
+    return {
+      url: `data:audio/mpeg;base64,${mp3Base64}`,
+      duration
+    };
+  });
 };

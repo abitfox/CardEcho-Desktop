@@ -14,6 +14,8 @@ export interface Card {
   breakdown: WordBreakdown[];
   context: string;
   grammarNote: string;
+  voiceName?: string; // 新增：朗读者姓名
+  audioDuration?: number; // 新增：音频时长（秒）
 }
 
 export interface Deck {
@@ -21,13 +23,14 @@ export interface Deck {
   title: string;
   description: string;
   icon: string;
+  sourceText?: string; // 保存原始素材文本
   cards: Card[];
   isSubscribed?: boolean;
   author?: string;
   createdBy?: string; // User ID of the creator
   createdAt: number;
   tags?: string[];
-  originDeckId?: string; // New: Tracks the library ID this store listing came from
+  originDeckId?: string; // Tracks the library ID this store listing came from
 }
 
 export interface User {

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Deck, Card, WordBreakdown, Language } from '../types';
-import { generateAudio, analyzeSentence, playAudio } from '../services/geminiService';
+import { generateAudio, analyzeSentence, playAudio, stopAllAudio } from '../services/geminiService';
 import { cloudService } from '../services/cloudService';
 import { t } from '../services/i18n';
 
@@ -25,10 +25,15 @@ const AVAILABLE_VOICES = [
 ];
 
 const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStartLearning, onPublish, isPublished, isPublishing, language }) => {
-  const [editedDeck, setEditedDeck] = useState<Deck>(JSON.parse(JSON.stringify(deck)));
+  const sortedDeck = {
+    ...deck,
+    cards: [...deck.cards].sort((a, b) => a.id.localeCompare(b.id))
+  };
+  const [editedDeck, setEditedDeck] = useState<Deck>(JSON.parse(JSON.stringify(sortedDeck)));
   const [activeCardIdx, setActiveCardIdx] = useState<number | null>(null);
   const [selectedVoice, setSelectedVoice] = useState('Kore');
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false); 
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -47,6 +52,11 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
       return () => clearTimeout(timer);
     }
   }, [editedDeck, deck]);
+
+  useEffect(() => {
+    stopAllAudio();
+    setIsPlayingAudio(false);
+  }, [activeCardIdx]);
 
   const handleCardChange = (field: keyof Card, value: any) => {
     if (activeCardIdx === null || !activeCard) return;
@@ -81,7 +91,7 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
 
   const addCard = () => {
     const newCard: Card = {
-      id: crypto.randomUUID(),
+      id: `${Date.now()}-${editedDeck.cards.length}`,
       text: '',
       translation: '',
       audioUrl: '#',
@@ -89,9 +99,10 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
       grammarNote: '',
       context: ''
     };
-    const newCards = [...editedDeck.cards, newCard];
+    const newCards = [...editedDeck.cards, newCard].sort((a, b) => a.id.localeCompare(b.id));
     setEditedDeck({ ...editedDeck, cards: newCards });
-    setActiveCardIdx(newCards.length - 1);
+    const newIdx = newCards.findIndex(c => c.id === newCard.id);
+    setActiveCardIdx(newIdx);
   };
 
   const deleteCard = (idx: number, e: React.MouseEvent) => {
@@ -129,12 +140,17 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
     setSaveStatus('saving');
     
     try {
-      const base64Mp3 = await generateAudio(activeCard.text, selectedVoice);
-      if (base64Mp3) {
-        const publicUrl = await cloudService.uploadAudio(activeCard.id, base64Mp3);
+      const audioResult = await generateAudio(activeCard.text, selectedVoice);
+      if (audioResult) {
+        const publicUrl = await cloudService.uploadAudio(activeCard.id, audioResult.url);
         if (publicUrl) {
           const newCards = [...editedDeck.cards];
-          newCards[activeCardIdx!] = { ...newCards[activeCardIdx!], audioUrl: publicUrl };
+          newCards[activeCardIdx!] = { 
+            ...newCards[activeCardIdx!], 
+            audioUrl: publicUrl,
+            voiceName: selectedVoice,
+            audioDuration: audioResult.duration
+          };
           const updatedDeck = { ...editedDeck, cards: newCards };
           setEditedDeck(updatedDeck);
           await onSave(updatedDeck);
@@ -142,8 +158,11 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
       } else {
         setSaveStatus('idle');
       }
-    } catch (err) {
-      console.error("Audio generation or auto-save failed", err);
+    } catch (err: any) {
+      console.error("Audio generation failed", err);
+      if (err?.status === 429) {
+        alert("API配额已耗尽，请稍后再试或检查您的 Gemini API 额度。");
+      }
       setSaveStatus('idle');
     } finally {
       setIsGeneratingAudio(false);
@@ -157,6 +176,7 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
     setBatchProgress({ current: 0, total: editedDeck.cards.length });
 
     const newCards = [...editedDeck.cards];
+    let quotaExceeded = false;
     
     try {
       for (let i = 0; i < newCards.length; i++) {
@@ -164,11 +184,23 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
         const card = newCards[i];
         if (!card.text.trim()) continue;
 
-        const base64Mp3 = await generateAudio(card.text, selectedVoice);
-        if (base64Mp3) {
-          const publicUrl = await cloudService.uploadAudio(card.id, base64Mp3);
-          if (publicUrl) {
-            newCards[i] = { ...newCards[i], audioUrl: publicUrl };
+        try {
+          const audioResult = await generateAudio(card.text, selectedVoice);
+          if (audioResult) {
+            const publicUrl = await cloudService.uploadAudio(card.id, audioResult.url);
+            if (publicUrl) {
+              newCards[i] = { 
+                ...newCards[i], 
+                audioUrl: publicUrl,
+                voiceName: selectedVoice,
+                audioDuration: audioResult.duration
+              };
+            }
+          }
+        } catch (cardErr: any) {
+          if (cardErr?.status === 429) {
+            quotaExceeded = true;
+            break;
           }
         }
       }
@@ -177,6 +209,10 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
       setEditedDeck(updatedDeck);
       await onSave(updatedDeck);
       setSaveStatus('saved');
+
+      if (quotaExceeded) {
+        alert("由于配额限制，部分卡片未能生成音频。请稍后点击‘批量生成’重试。");
+      }
     } catch (err) {
       console.error("Batch audio generation failed", err);
       setSaveStatus('idle');
@@ -185,9 +221,20 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
     }
   };
 
-  const handlePlayAudio = async () => {
+  const toggleAudioPlayback = async () => {
     if (!activeCard || activeCard.audioUrl === '#') return;
-    await playAudio(activeCard.audioUrl);
+
+    if (isPlayingAudio) {
+      stopAllAudio();
+      setIsPlayingAudio(false);
+    } else {
+      setIsPlayingAudio(true);
+      try {
+        await playAudio(activeCard.audioUrl);
+      } finally {
+        setIsPlayingAudio(false);
+      }
+    }
   };
 
   const handleManualSave = async () => {
@@ -231,7 +278,7 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
           <div className="bg-green-600 text-white px-6 py-2 rounded-full shadow-2xl flex items-center gap-2 text-sm font-bold">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
-            {isBatchGenerating ? t(language, 'editor.batchSuccess') : t(language, 'editor.synced')}
+            {isBatchGenerating ? t(language, 'editor.batchProcessing') : t(language, 'editor.synced')}
           </div>
         </div>
       )}
@@ -261,6 +308,7 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
             >
               <div className="flex items-center gap-2">
                 <p className={`text-sm font-semibold truncate flex-1 ${activeCardIdx === idx ? 'text-blue-600' : 'text-gray-800'}`}>
+                  <span className="text-[10px] text-gray-300 mr-1.5 tabular-nums">#{idx + 1}</span>
                   {card.text || '(Empty Card)'}
                 </p>
                 {card.audioUrl !== '#' && (
@@ -290,15 +338,15 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
       {/* Main Panel */}
       <div className="flex-1 overflow-y-auto p-12 bg-white custom-scrollbar">
         {/* Persistent Editor Header */}
-        <div className="max-w-4xl mx-auto flex justify-between items-center mb-10">
+        <div className="max-w-4xl mx-auto flex justify-between items-center mb-12">
             <div>
-               <h2 className="text-2xl font-bold text-gray-800">{activeCardIdx === null ? 'Deck Settings' : t(language, 'editor.title')}</h2>
-               <p className="text-xs text-gray-400 mt-1">
-                 {activeCardIdx === null ? 'Manage main identity of this resource pack.' : `Editing Card ${activeCardIdx + 1} of ${editedDeck.cards.length}`}
+               <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{activeCardIdx === null ? 'Deck Settings' : t(language, 'editor.title')}</h2>
+               <p className="text-xs text-gray-400 mt-1.5 font-medium">
+                 {activeCardIdx === null ? 'Manage your learning resource identity and source material.' : `Editing Card ${activeCardIdx + 1} of ${editedDeck.cards.length}`}
                </p>
             </div>
             <div className="flex gap-3">
-               <button onClick={onCancel} className="px-4 py-2 text-gray-400 font-bold hover:text-gray-600 transition-colors">{t(language, 'editor.cancel')}</button>
+               <button onClick={onCancel} className="px-4 py-2 text-sm text-gray-400 font-bold hover:text-gray-600 transition-colors">{t(language, 'editor.cancel')}</button>
                
                <button 
                 onClick={handleStorePublish}
@@ -329,7 +377,7 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
                <button 
                 onClick={handleManualSave} 
                 disabled={!hasChanges || saveStatus === 'saving'}
-                className={`px-6 py-2 rounded-xl font-bold transition-all shadow-lg active:scale-95 ${
+                className={`px-6 py-2 rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95 ${
                   !hasChanges 
                     ? 'bg-gray-100 text-gray-400 cursor-default shadow-none' 
                     : 'bg-white border-2 border-blue-600 text-blue-600 hover:bg-blue-50'
@@ -339,7 +387,7 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
                </button>
                <button 
                 onClick={handleStartLearning}
-                className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95 flex items-center gap-2"
+                className="px-6 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95 flex items-center gap-2"
                >
                   <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                   {t(language, 'editor.startLearning')}
@@ -348,53 +396,70 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
         </div>
 
         {activeCardIdx === null ? (
-          <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <section className="bg-slate-50/50 border border-gray-100 rounded-[32px] p-10">
-                <div className="flex flex-col md:flex-row gap-10 items-start">
-                   <div className="space-y-3">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Icon</label>
+          <div className="max-w-4xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <section className="bg-white border border-gray-100 rounded-[32px] p-8 md:p-12 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/20 rounded-full -mr-32 -mt-32 blur-3xl pointer-events-none"></div>
+                
+                <div className="flex flex-col md:flex-row gap-12 items-start relative z-10">
+                   <div className="space-y-4 flex flex-col items-center">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center w-full">Cover Icon</label>
                       <input 
                         type="text" 
                         value={editedDeck.icon}
                         onChange={(e) => setEditedDeck({...editedDeck, icon: e.target.value})}
-                        className="w-24 h-24 text-4xl bg-white border border-gray-200 rounded-[24px] text-center outline-none focus:border-blue-500 shadow-sm"
+                        className="w-28 h-28 text-5xl bg-gray-50 border border-gray-100 rounded-3xl text-center outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-500/5 transition-all shadow-inner"
                         placeholder="🔥"
                       />
+                      <p className="text-[10px] text-gray-400 font-medium italic">Use an emoji</p>
                    </div>
-                   <div className="flex-1 space-y-6 w-full">
-                      <div className="space-y-2">
-                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Deck Title</label>
+                   
+                   <div className="flex-1 space-y-8 w-full">
+                      <div className="space-y-3">
+                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Title</label>
                          <input 
                             value={editedDeck.title}
                             onChange={(e) => setEditedDeck({ ...editedDeck, title: e.target.value })}
-                            className="w-full text-2xl font-black text-gray-900 bg-white border border-gray-200 rounded-2xl px-6 py-4 outline-none focus:border-blue-500 shadow-sm"
+                            className="w-full text-xl font-bold text-gray-900 bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-500/5 transition-all shadow-inner"
                             placeholder="e.g. Daily French Expressions"
                          />
                       </div>
-                      <div className="space-y-2">
-                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Introduction / Description</label>
+                      <div className="space-y-3">
+                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Description</label>
                          <textarea 
                             value={editedDeck.description}
                             onChange={(e) => setEditedDeck({ ...editedDeck, description: e.target.value })}
-                            className="w-full text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-2xl px-6 py-4 outline-none focus:border-blue-500 shadow-sm h-32 resize-none leading-relaxed"
+                            className="w-full text-sm font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-500/5 transition-all shadow-inner h-32 resize-none leading-relaxed custom-scrollbar"
                             placeholder="Describe what learners will achieve with this pack..."
                          />
                       </div>
                    </div>
                 </div>
+
+                <div className="mt-12 pt-10 border-t border-gray-50 relative z-10">
+                    <div className="flex items-center justify-between mb-4 px-1">
+                       <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Source Material Text (原文素材)</label>
+                       <span className="text-[10px] text-gray-400 font-medium italic">Used for AI reference</span>
+                    </div>
+                    <textarea 
+                      value={editedDeck.sourceText || ''}
+                      onChange={(e) => setEditedDeck({ ...editedDeck, sourceText: e.target.value })}
+                      className="w-full text-sm font-medium text-gray-600 bg-blue-50/30 border border-blue-100/50 rounded-2xl px-6 py-5 outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-500/5 transition-all shadow-inner h-64 resize-none leading-relaxed custom-scrollbar"
+                      placeholder="Paste the source English text here..."
+                    />
+                </div>
              </section>
 
-             <div className="p-8 bg-blue-50/40 border border-dashed border-blue-200 rounded-[32px] flex items-center gap-4">
-                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-xl shadow-sm border border-blue-50">📚</div>
+             <div className="p-8 bg-blue-50/30 border border-blue-100 rounded-[32px] flex items-center gap-6 shadow-sm">
+                <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-2xl shadow-sm border border-blue-50 flex-shrink-0">📊</div>
                 <div className="flex-1">
-                   <p className="text-sm font-bold text-blue-900">Resource Statistics</p>
-                   <p className="text-xs text-blue-700/70">This deck currently contains <span className="font-bold text-blue-600">{editedDeck.cards.length} cards</span>. You can manage them from the sidebar on the left.</p>
+                   <p className="text-sm font-bold text-blue-900">Deck Statistics</p>
+                   <p className="text-xs text-blue-700/60 font-medium mt-0.5">This resource pack currently contains <span className="font-bold text-blue-600 underline underline-offset-4">{editedDeck.cards.length} learning cards</span>. Use the sidebar to navigate through them.</p>
                 </div>
              </div>
           </div>
         ) : activeCard ? (
           <div className="max-w-4xl mx-auto space-y-12 pb-32 animate-in fade-in duration-300">
-             {/* AI Deep Dive Feature */}
+             {/* Card Editing UI */}
              <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 flex items-center justify-between group">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform">
@@ -415,7 +480,6 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
                 </button>
              </div>
 
-             {/* Basic Content Section */}
              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-4">
                   <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t(language, 'editor.originalText')}</label>
@@ -439,7 +503,6 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
                 </div>
              </div>
 
-             {/* Advanced Content Section */}
              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-4">
                   <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t(language, 'editor.grammarNote')}</label>
@@ -463,9 +526,7 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
                 </div>
              </div>
 
-             {/* Audio Configuration Section */}
              <div className="p-8 bg-gray-50 rounded-3xl border border-gray-100 space-y-8 mt-8 relative overflow-hidden">
-                {/* Batch Progress Overlay */}
                 {isBatchGenerating && (
                   <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-12 animate-in fade-in duration-300">
                     <div className="w-full max-w-md space-y-6">
@@ -483,10 +544,6 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
                             style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
                           ></div>
                        </div>
-                       <p className="text-xs text-gray-400 text-center font-medium leading-relaxed">
-                          Synchronizing high-fidelity neural audio to Echo Cloud... <br/>
-                          Please keep the application open.
-                       </p>
                     </div>
                   </div>
                 )}
@@ -545,14 +602,38 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
 
                    {activeCard.audioUrl !== '#' ? (
                       <div className="flex items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-blue-50">
-                        <button onClick={handlePlayAudio} className="w-14 h-14 bg-blue-600 text-white rounded-full flex items-center justify-center hover:scale-105 transition-transform shadow-md">
-                           <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                        <button 
+                          onClick={toggleAudioPlayback} 
+                          className={`w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-md active:scale-95 ${
+                            isPlayingAudio 
+                              ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-100' 
+                              : 'bg-blue-600 text-white hover:scale-105'
+                          }`}
+                        >
+                           {isPlayingAudio ? (
+                             <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                           ) : (
+                             <svg className="w-7 h-7 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                           )}
                         </button>
-                        <div className="flex-1 overflow-hidden">
-                           <p className="text-[10px] font-mono text-gray-400 truncate mb-1">{activeCard.audioUrl}</p>
-                           <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded border border-green-100 uppercase">{t(language, 'editor.synced')}</span>
-                              <span className="text-[10px] text-gray-400 italic">MP3 (64kbps)</span>
+                        <div className="flex-1 flex flex-col justify-center">
+                           <div className="flex items-center gap-2 mb-1.5">
+                              <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-wider flex items-center gap-1">
+                                <span className="text-[12px]">🎙️</span> {activeCard.voiceName || selectedVoice}
+                              </span>
+                              <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded border border-green-100 uppercase tracking-tighter">
+                                {t(language, 'editor.synced')}
+                              </span>
+                           </div>
+                           <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-1.5">
+                                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <span className="text-xs font-bold text-gray-700 tabular-nums tracking-tight">
+                                  {activeCard.audioDuration ? activeCard.audioDuration.toFixed(1) + 's' : '--'}
+                                </span>
+                              </div>
+                              <span className="w-1 h-1 bg-gray-200 rounded-full"></span>
+                              <span className="text-[10px] text-gray-400 font-medium italic">MP3 Audio Resource</span>
                            </div>
                         </div>
                       </div>
@@ -564,7 +645,6 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
                 </div>
              </div>
 
-             {/* Vocabulary Breakdown Editor */}
              <div className="space-y-6 pt-12 border-t border-gray-100">
                 <div className="flex items-center justify-between">
                    <div>
@@ -627,11 +707,6 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
                          </div>
                       </div>
                    ))}
-                   {activeCard.breakdown.length === 0 && (
-                     <div className="text-center p-6 border border-dashed border-gray-100 rounded-2xl text-xs text-gray-400 italic">
-                        Click "Deep Dive" above to auto-generate word analysis.
-                     </div>
-                   )}
                 </div>
              </div>
           </div>

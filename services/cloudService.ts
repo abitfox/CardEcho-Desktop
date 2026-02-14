@@ -12,7 +12,6 @@ export const cloudService = {
   async signUp(user: User, password?: string): Promise<User | null> {
     if (!password) throw new Error("Password is required for signup");
 
-    // 1. 使用 Supabase Auth 注册
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: user.email,
       password: password,
@@ -24,7 +23,6 @@ export const cloudService = {
       }
     });
 
-    // 如果报错，直接抛出 Supabase 的错误
     if (authError) {
       console.error("Supabase Auth Error:", authError);
       throw authError; 
@@ -32,9 +30,6 @@ export const cloudService = {
     
     if (!authData.user) return null;
 
-    // 2. 在 profiles 表中同步用户信息
-    // 注意：如果 Supabase 开启了 Email Confirmation，此时用户可能尚未真正登录（Session 为空）
-    // 我们使用 upsert 并忽略 RLS 错误（或者确保 SQL 策略允许插入）
     const { data: profileData, error: profileError } = await supabase.from('profiles').upsert({ 
       id: authData.user.id, 
       email: user.email, 
@@ -44,7 +39,6 @@ export const cloudService = {
       updated_at: new Date().toISOString() 
     }, { onConflict: 'id' }).select().single();
 
-    // 如果 profile 插入失败（可能是由于 RLS 限制未验证用户插入），我们至少返回 authData 的基本信息
     if (profileError) {
       console.warn("Profile sync warning:", profileError.message);
       return {
@@ -66,20 +60,17 @@ export const cloudService = {
   },
 
   async signIn(email: string, password: string): Promise<User | null> {
-    // 1. 使用 Supabase Auth 登录
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password
     });
 
     if (authError) {
-      // 这里的错误通常是 "Invalid login credentials"
       throw authError;
     }
     
     if (!authData.user) return null;
 
-    // 2. 获取关联的 Profile
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
       .select('*')
@@ -90,7 +81,6 @@ export const cloudService = {
         console.error("Fetch profile error:", profileError);
     }
     
-    // 如果没有 profile（可能注册时同步失败），则补全
     if (!profileData) {
       const { data: newProfile } = await supabase.from('profiles').upsert({
         id: authData.user.id,
@@ -137,7 +127,6 @@ export const cloudService = {
       };
     }
     
-    // 兜底查询
     const { data } = await supabase.from('profiles').select('*').eq('email', email).maybeSingle();
     if (data) return { 
         id: data.id, 
@@ -149,12 +138,11 @@ export const cloudService = {
     return null;
   },
 
-  // --- 其他方法保持不变 ---
   async fetchStoreDecks(): Promise<Deck[]> {
     try {
       const { data, error } = await supabase
         .from('store_decks')
-        .select(`id, title, description, icon, author, user_id, created_at, tags, origin_deck_id, store_cards (*)`)
+        .select(`id, title, description, icon, source_text, author, user_id, created_at, tags, origin_deck_id, store_cards (*)`)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -164,6 +152,7 @@ export const cloudService = {
         title: d.title,
         description: d.description,
         icon: d.icon,
+        sourceText: d.source_text,
         author: d.author,
         createdBy: d.user_id,
         createdAt: new Date(d.created_at).getTime(),
@@ -175,9 +164,11 @@ export const cloudService = {
           translation: c.translation, 
           audioUrl: c.audio_url, 
           context: c.context, 
-          grammar_note: c.grammar_note, 
-          breakdown: c.breakdown
-        }))
+          grammarNote: c.grammar_note, 
+          breakdown: c.breakdown,
+          voiceName: c.voice_name,
+          audioDuration: c.audio_duration
+        })).sort((a: any, b: any) => a.id.localeCompare(b.id))
       }));
     } catch (err: any) {
       console.warn("Store fetch failed:", err.message);
@@ -199,6 +190,7 @@ export const cloudService = {
         .update({
           description: deck.description,
           icon: deck.icon,
+          source_text: deck.sourceText,
           author: userName,
           tags: deck.tags || []
         })
@@ -213,8 +205,10 @@ export const cloudService = {
         translation: card.translation, 
         audio_url: card.audioUrl, 
         context: card.context, 
-        grammar_note: card.grammarNote, 
-        breakdown: card.breakdown 
+        grammar_note: card.grammarNote,
+        breakdown: card.breakdown,
+        voice_name: card.voiceName,
+        audio_duration: card.audioDuration
       }));
       await supabase.from('store_cards').insert(cardsToInsert);
     } else {
@@ -224,6 +218,7 @@ export const cloudService = {
           title: deck.title, 
           description: deck.description, 
           icon: deck.icon, 
+          source_text: deck.sourceText,
           author: userName,
           user_id: userId,
           origin_deck_id: deck.id, 
@@ -240,8 +235,10 @@ export const cloudService = {
         translation: card.translation, 
         audio_url: card.audioUrl, 
         context: card.context, 
-        grammar_note: card.grammarNote, 
-        breakdown: card.breakdown 
+        grammar_note: card.grammarNote,
+        breakdown: card.breakdown,
+        voice_name: card.voiceName,
+        audio_duration: card.audioDuration
       }));
       await supabase.from('store_cards').insert(cardsToInsert);
     }
@@ -278,6 +275,7 @@ export const cloudService = {
           title: deck.title, 
           description: deck.description, 
           icon: deck.icon, 
+          source_text: deck.sourceText,
           author: deck.author,
           tags: deck.tags || []
         }).select().single();
@@ -288,8 +286,10 @@ export const cloudService = {
           translation: card.translation, 
           audio_url: card.audioUrl, 
           context: card.context, 
-          grammar_note: card.grammarNote, 
-          breakdown: card.breakdown 
+          grammar_note: card.grammarNote,
+          breakdown: card.breakdown,
+          voice_name: card.voiceName,
+          audio_duration: card.audioDuration
         }));
         await supabase.from('store_cards').insert(cardsToInsert);
       } catch (err: any) {
@@ -311,7 +311,6 @@ export const cloudService = {
       const mimeType = isMp3 ? 'audio/mpeg' : 'audio/wav';
       const ext = isMp3 ? '.mp3' : '.wav';
       const blob = new Blob([array], { type: mimeType });
-
       const fileName = `${cardId}_${Date.now()}${ext}`;
       
       const { error } = await supabase.storage
@@ -323,11 +322,7 @@ export const cloudService = {
         });
 
       if (error) throw error;
-
-      const { data: urlData } = supabase.storage
-        .from('card-audio')
-        .getPublicUrl(fileName);
-
+      const { data: urlData } = supabase.storage.from('card-audio').getPublicUrl(fileName);
       return urlData.publicUrl;
     } catch (err: any) {
       console.error('File upload failed:', err.message);
@@ -342,6 +337,7 @@ export const cloudService = {
       title: deck.title, 
       description: deck.description, 
       icon: deck.icon, 
+      source_text: deck.sourceText,
       is_subscribed: deck.isSubscribed || false, 
       author: deck.author, 
       created_at: new Date(deck.createdAt).toISOString() 
@@ -356,8 +352,10 @@ export const cloudService = {
         translation: card.translation, 
         audio_url: card.audioUrl, 
         context: card.context, 
-        grammar_note: card.grammarNote, 
-        breakdown: card.breakdown 
+        grammar_note: card.grammarNote,
+        breakdown: card.breakdown,
+        voice_name: card.voiceName,
+        audio_duration: card.audioDuration
       }));
       const { error: cardError } = await supabase.from('cards').upsert(cardsToInsert);
       if (cardError) throw cardError;
@@ -377,11 +375,14 @@ export const cloudService = {
       ...d, 
       createdAt: new Date(d.created_at).getTime(), 
       isSubscribed: d.is_subscribed,
+      sourceText: d.source_text,
       cards: d.cards.map((c: any) => ({ 
         ...c, 
         audioUrl: c.audio_url, 
-        grammarNote: c.grammar_note 
-      }))
+        grammarNote: c.grammar_note,
+        voiceName: c.voice_name,
+        audioDuration: c.audio_duration
+      })).sort((a: any, b: any) => a.id.localeCompare(b.id))
     }));
   },
 
