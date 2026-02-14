@@ -1,0 +1,215 @@
+
+import { Language } from '../types';
+
+const translations = {
+  en: {
+    sidebar: {
+      library: 'My Decks',
+      store: 'Store',
+      create: 'Create',
+      learning: 'Focus Mode',
+      stats: 'Stats',
+      settings: 'Settings',
+      progress: 'Daily Progress',
+      cards: 'cards',
+      logout: 'Logout'
+    },
+    settings: {
+      title: 'Account Settings',
+      desc: 'Manage your profile information and account preferences.',
+      personalInfo: 'Personal Information',
+      displayName: 'Display Name',
+      email: 'Email Address',
+      avatarUrl: 'Avatar URL',
+      save: 'Save Changes',
+      syncing: 'Syncing...',
+      systemPref: 'System Preferences',
+      language: 'Language',
+      languageDesc: 'Select your preferred interface language.',
+      cloudSync: 'Cloud Synchronization',
+      cloudSyncDesc: 'Keep your progress synced across all desktop clients.',
+      hardwareAcc: 'Hardware Acceleration'
+    },
+    library: {
+      title: 'My Learning Library',
+      empty: 'Your library is empty.',
+      explore: 'Explore Marketplace',
+      study: 'STUDY',
+      edit: 'EDIT',
+      tabCreated: 'Created By Me',
+      tabSubscribed: 'Subscribed',
+      deleteConfirmTitle: 'Delete Learning Deck',
+      deleteConfirmMsg: 'Are you sure you want to permanently delete this deck? This action cannot be undone and all card progress will be lost.',
+      deleteAction: 'Delete Deck',
+      deleteCancel: 'Cancel'
+    },
+    store: {
+      title: 'Content Store',
+      desc: 'Discover and subscribe to curated language decks created by experts.',
+      subscribing: 'Subscribing...',
+      subscribed: 'Subscribed',
+      myPublished: 'My Published',
+      subscribeFree: 'Subscribe Free',
+      deleteFromStore: 'Delete from Store',
+      deleteConfirmTitle: 'Delete Marketplace Listing',
+      deleteConfirmMsg: 'You are about to delete this resource from the marketplace. Users will no longer be able to discover or subscribe to it. This action is irreversible.'
+    },
+    create: {
+      title: 'Create New Deck',
+      desc: 'Paste your text and let CardEcho AI disassemble it into bite-sized learning cards.',
+      generate: 'Generate Cards with AI',
+      cancel: 'Cancel',
+      processing: 'AI Disassembling...',
+      confirm: 'Confirm and Add to Library',
+      editRaw: 'Edit Raw Text'
+    },
+    learning: {
+      deepDive: 'AI Deep Dive',
+      analyzing: 'Analyzing...',
+      vocabulary: 'Vocabulary Break-up',
+      grammar: 'Grammar Points',
+      context: 'Usage Context',
+      addReview: 'Add to Review Deck',
+      selectCard: 'Select a card to see analysis',
+      sentence: 'Sentence'
+    },
+    editor: {
+      title: 'Card Editor',
+      save: 'Save Changes',
+      syncing: 'Syncing...',
+      startLearning: 'Start Learning',
+      originalText: 'Original Text',
+      translation: 'Translation',
+      grammarNote: 'Grammar Note',
+      usageContext: 'Usage Context',
+      vocabulary: 'Vocabulary Breakdown',
+      vocabDesc: 'Detailed analysis of key words in the sentence',
+      addWord: 'Add Word',
+      aiVoice: 'AI Voice Configuration',
+      voiceDesc: 'Choose a narrator style for this card',
+      generateVoice: 'Generate AI Voice',
+      generateAllVoice: 'Generate All Audio',
+      generating: 'Generating...',
+      batchProcessing: 'Batch processing {current}/{total}...',
+      batchSuccess: 'Batch audio generation complete!',
+      cancel: 'Cancel',
+      word: 'Word',
+      phonetic: 'Phonetic',
+      meaning: 'Meaning',
+      role: 'Role',
+      synced: 'Synced to Cloud',
+      noAudio: 'No audio asset generated for this card yet.',
+      selectCardPrompt: 'Select a card from the list to edit its content and audio.'
+    }
+  },
+  zh: {
+    sidebar: {
+      library: '我的学习',
+      store: '内容商城',
+      create: '创建新卡片',
+      learning: '学习模式',
+      stats: '统计',
+      settings: '设置',
+      progress: '今日进度',
+      cards: '张卡片',
+      logout: '退出登录'
+    },
+    settings: {
+      title: '账号设置',
+      desc: '管理您的个人资料和账号偏好。',
+      personalInfo: '个人信息',
+      displayName: '显示名称',
+      email: '电子邮箱',
+      avatarUrl: '头像链接',
+      save: '保存更改',
+      syncing: '同步中...',
+      systemPref: '系统偏好',
+      language: '语言设置',
+      languageDesc: '选择您偏好的界面显示语言。',
+      cloudSync: '云端同步',
+      cloudSyncDesc: '在所有桌面客户端之间同步您的学习进度。',
+      hardwareAcc: '硬件加速'
+    },
+    library: {
+      title: '我的学习资源库',
+      empty: '您的资源库空空如也。',
+      explore: '去商城看看',
+      study: '开始学习',
+      edit: '编辑',
+      tabCreated: '我创建的',
+      tabSubscribed: '外部订阅',
+      deleteConfirmTitle: '删除学习包',
+      deleteConfirmMsg: '您确定要永久删除这个学习包吗？此操作不可撤销，所有卡片及进度都将丢失。',
+      deleteAction: '确认删除',
+      deleteCancel: '取消'
+    },
+    store: {
+      title: '内容商城',
+      desc: '发现并订阅由专家创建的精选语言资源包。',
+      subscribing: '订阅中...',
+      subscribed: '已订阅',
+      myPublished: '我的发布',
+      subscribeFree: '免费订阅',
+      deleteFromStore: '从商城下架',
+      deleteConfirmTitle: '从商城下架资源',
+      deleteConfirmMsg: '您正在执行管理员操作。此资源将从商城中永久移除，用户将无法再搜索或订阅该内容。此操作不可恢复。'
+    },
+    create: {
+      title: '创建新资源包',
+      desc: '粘贴您的文本，让 CardEcho AI 将其拆解为易于学习的卡片。',
+      generate: '使用 AI 生成卡片',
+      cancel: '取消',
+      processing: 'AI 正在拆解中...',
+      confirm: '确认并添加到库',
+      editRaw: '编辑原文'
+    },
+    learning: {
+      deepDive: 'AI 深度解析',
+      analyzing: '分析中...',
+      vocabulary: '词汇拆解',
+      grammar: '语法要点',
+      context: '使用语境',
+      addReview: '加入复习计划',
+      selectCard: '选择一张卡片以查看分析',
+      sentence: '句子'
+    },
+    editor: {
+      title: '卡片编辑器',
+      save: '保存更改',
+      syncing: '同步中...',
+      startLearning: '开始学习',
+      originalText: '原文文本',
+      translation: '翻译内容',
+      grammarNote: '语法解析',
+      usageContext: '使用语境',
+      vocabulary: '词汇拆解',
+      vocabDesc: '针对句中重点词汇的详细分析',
+      addWord: '添加单词',
+      aiVoice: 'AI 语音配置',
+      voiceDesc: '为此卡片选择一位朗读者风格',
+      generateVoice: '生成 AI 语音',
+      generateAllVoice: '批量生成全包语音',
+      generating: '正在生成并同步...',
+      batchProcessing: '批量处理中 {current}/{total}...',
+      batchSuccess: '全包语音批量生成完成！',
+      cancel: '取消',
+      word: '单词',
+      phonetic: '音标',
+      meaning: '释义',
+      role: '词性',
+      synced: '已同步至云端',
+      noAudio: '此卡片尚未生成音频资源。',
+      selectCardPrompt: '从左侧列表中选择一张卡片以编辑内容和语音。'
+    }
+  }
+};
+
+export const t = (lang: Language, path: string): string => {
+  const keys = path.split('.');
+  let current: any = translations[lang];
+  for (const key of keys) {
+    if (current[key] === undefined) return path;
+    current = current[key];
+  }
+  return current;
+};
