@@ -9,14 +9,16 @@ interface SidebarProps {
   user: User | null;
   onLogout: () => void;
   language: Language;
+  hasDecks: boolean; // 新增：标识当前用户是否有学习资源
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentSection, onSectionChange, user, onLogout, language }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentSection, onSectionChange, user, onLogout, language, hasDecks }) => {
   const menuItems = [
     { id: AppSection.LIBRARY, label: t(language, 'sidebar.library'), icon: '📚' },
     { id: AppSection.STORE, label: t(language, 'sidebar.store'), icon: '🛒' },
     { id: AppSection.CREATE, label: t(language, 'sidebar.create'), icon: '➕' },
-    { id: AppSection.LEARNING, label: t(language, 'sidebar.learning'), icon: '🎧' },
+    // 仅在有资源包时显示学习模式
+    ...(hasDecks ? [{ id: AppSection.LEARNING, label: t(language, 'sidebar.learning'), icon: '🎧' }] : []),
     { id: AppSection.STATISTICS, label: t(language, 'sidebar.stats'), icon: '📊' },
     { id: AppSection.SETTINGS, label: t(language, 'sidebar.settings'), icon: '⚙️' },
   ];
@@ -62,7 +64,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentSection, onSectionChange, user
           </div>
         </div>
 
-        {/* User Profile Area - Acts as Account Settings Entry */}
+        {/* User Profile Area */}
         {user && (
           <div className="flex items-center justify-between p-2 hover:bg-gray-200 rounded-xl transition-colors group">
             <button 

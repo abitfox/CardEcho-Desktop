@@ -30,9 +30,6 @@ const encodeBase64 = (bytes: Uint8Array): string => {
   return btoa(binary);
 };
 
-/**
- * Exponential Backoff Retry Utility for Gemini API
- */
 async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
   try {
     return await fn();
@@ -46,9 +43,6 @@ async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000)
   }
 }
 
-/**
- * Encodes raw PCM (Int16) data to MP3 using global lamejs
- */
 const pcmToMp3 = (pcmData: Int16Array, sampleRate: number = 24000): Uint8Array => {
   const lame = getLamejs();
   if (!lame) {
@@ -152,7 +146,7 @@ export const analyzeSentence = async (sentence: string) => {
       model: "gemini-3-flash-preview",
       contents: [{ parts: [{ text: `Sentence to analyze: "${sentence}"` }] }],
       config: {
-        systemInstruction: "You are a professional language tutor. Analyze sentences and provide structured feedback for learners in CHINESE.",
+        systemInstruction: "You are a professional language tutor for Chinese learners. Analyze the English sentence. The output fields 'word', 'meaning', 'role', 'grammarNote', and 'context' MUST be in CHINESE. Keep the 'word' field as English word and 'phonetic' as standard IPA.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -187,7 +181,7 @@ export const disassembleText = async (rawText: string) => {
       model: "gemini-3-pro-preview",
       contents: [{ parts: [{ text: `Text to disassemble: "${rawText}"` }] }],
       config: {
-        systemInstruction: "You are a meticulous language teacher. Disassemble text into a comprehensive learning deck with cards in CHINESE.",
+        systemInstruction: "You are a meticulous language teacher. Disassemble English text into a learning deck. 1. The 'text' field MUST BE THE ORIGINAL ENGLISH SENTENCE. 2. The 'translation', 'grammarNote', and 'context' fields MUST BE IN CHINESE. 3. For 'breakdown', explain meanings and roles in CHINESE. 4. Suggest a repeatCount (3-5) based on complexity.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -200,25 +194,26 @@ export const disassembleText = async (rawText: string) => {
               items: {
                 type: Type.OBJECT,
                 properties: {
-                  text: { type: Type.STRING },
-                  translation: { type: Type.STRING },
-                  grammarNote: { type: Type.STRING },
-                  context: { type: Type.STRING },
+                  text: { type: Type.STRING, description: "The ORIGINAL English sentence" },
+                  translation: { type: Type.STRING, description: "Chinese translation" },
+                  grammarNote: { type: Type.STRING, description: "Grammar explanation in Chinese" },
+                  context: { type: Type.STRING, description: "Usage context in Chinese" },
+                  repeatCount: { type: Type.INTEGER, description: "Suggested repeat count between 3 and 5" },
                   breakdown: {
                     type: Type.ARRAY,
                     items: {
                       type: Type.OBJECT,
                       properties: {
-                        word: { type: Type.STRING },
-                        phonetic: { type: Type.STRING },
-                        meaning: { type: Type.STRING },
-                        role: { type: Type.STRING }
+                        word: { type: Type.STRING, description: "The English word/phrase" },
+                        phonetic: { type: Type.STRING, description: "IPA Phonetic" },
+                        meaning: { type: Type.STRING, description: "Chinese meaning" },
+                        role: { type: Type.STRING, description: "Grammatical role in Chinese" }
                       },
                       required: ["word", "phonetic", "meaning", "role"]
                     }
                   }
                 },
-                required: ["text", "translation", "grammarNote", "context", "breakdown"]
+                required: ["text", "translation", "grammarNote", "context", "breakdown", "repeatCount"]
               }
             }
           },
@@ -234,7 +229,11 @@ export const generateAudio = async (text: string, voiceName: string = 'Kore'): P
   return callWithRetry(async () => {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Say clearly: ${text}` }] }],
+      contents: [{ 
+        parts: [{ 
+          text: `Speak this text naturally at a normal conversational speed, using authentic native-like intonation and expressive emotion: "${text}"` 
+        }] 
+      }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {

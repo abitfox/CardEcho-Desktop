@@ -14,6 +14,8 @@ import { MOCK_LIBRARY_DECKS, MOCK_STORE_DECKS } from './constants';
 import { cloudService } from './services/cloudService';
 import { t } from './services/i18n';
 
+const LAST_DECK_KEY = 'cardecho_last_deck_id';
+
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentSection, setCurrentSection] = useState<AppSection>(AppSection.LIBRARY);
@@ -45,6 +47,20 @@ const App: React.FC = () => {
     }
   };
 
+  // 核心逻辑：自动寻找合适的学习资源包
+  const autoSelectDeck = (userDecks: Deck[]) => {
+    if (userDecks.length === 0) return null;
+    
+    const lastDeckId = localStorage.getItem(LAST_DECK_KEY);
+    if (lastDeckId) {
+      const found = userDecks.find(d => d.id === lastDeckId);
+      if (found) return found;
+    }
+    
+    // 如果没有上次记录，取最近的一个（userDecks 已经是降序排列）
+    return userDecks[0];
+  };
+
   useEffect(() => {
     const initApp = async () => {
       try {
@@ -56,6 +72,10 @@ const App: React.FC = () => {
             setCurrentUser(profile);
             const userDecks = await cloudService.fetchUserDecks(profile.id);
             setDecks(userDecks);
+            
+            // 智能选择初始化学习包
+            const selected = autoSelectDeck(userDecks);
+            if (selected) setActiveDeck(selected);
           }
         }
       } catch (error) {
@@ -67,6 +87,12 @@ const App: React.FC = () => {
     initApp();
   }, []);
 
+  // 封装更新活动学习包的动作，包含持久化
+  const handleSetActiveDeck = (deck: Deck) => {
+    setActiveDeck(deck);
+    localStorage.setItem(LAST_DECK_KEY, deck.id);
+  };
+
   const handleLanguageChange = (newLang: Language) => {
     setLanguage(newLang);
     localStorage.setItem('cardecho_lang', newLang);
@@ -74,6 +100,7 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     localStorage.removeItem('cardecho_user_email');
+    localStorage.removeItem(LAST_DECK_KEY);
     setCurrentUser(null);
     setDecks([]);
     setActiveDeck(null);
@@ -87,6 +114,8 @@ const App: React.FC = () => {
     try {
       const userDecks = await cloudService.fetchUserDecks(user.id);
       setDecks(userDecks);
+      const selected = autoSelectDeck(userDecks);
+      if (selected) setActiveDeck(selected);
     } catch (err) {
       console.error("Failed to fetch user decks", err);
     } finally {
@@ -100,6 +129,8 @@ const App: React.FC = () => {
       await cloudService.saveDeck(deck, currentUser.id);
       const userDecks = await cloudService.fetchUserDecks(currentUser.id);
       setDecks(userDecks);
+      // 新创建的包设为当前活动
+      handleSetActiveDeck(deck);
       setCurrentSection(AppSection.LIBRARY);
     } catch (err) {
       alert("Failed to save deck to cloud.");
@@ -127,6 +158,11 @@ const App: React.FC = () => {
       if (currentUser) {
         const userDecks = await cloudService.fetchUserDecks(currentUser.id);
         setDecks(userDecks);
+        // 如果删除的是当前学习包，重新选择
+        if (activeDeck?.id === deckToDelete.id) {
+           const selected = autoSelectDeck(userDecks);
+           setActiveDeck(selected);
+        }
       }
       setDeckToDelete(null);
     } catch (err) {
@@ -150,12 +186,10 @@ const App: React.FC = () => {
       };
       await cloudService.saveDeck(subscribedDeck, currentUser.id);
       
-      // 更新本地状态
       const userDecks = await cloudService.fetchUserDecks(currentUser.id);
       setDecks(userDecks);
       
-      // 优化：订阅后直接进入学习
-      setActiveDeck(subscribedDeck);
+      handleSetActiveDeck(subscribedDeck);
       setCurrentSection(AppSection.LEARNING);
       
     } catch (err) {
@@ -217,6 +251,7 @@ const App: React.FC = () => {
         user={currentUser} 
         onLogout={handleLogout}
         language={language}
+        hasDecks={decks.length > 0} // 传递显隐判断状态
       />
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
@@ -287,7 +322,7 @@ const App: React.FC = () => {
                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                             <button 
-                              onClick={() => { setActiveDeck(deck); setCurrentSection(AppSection.LEARNING); }}
+                              onClick={() => { handleSetActiveDeck(deck); setCurrentSection(AppSection.LEARNING); }}
                               className="px-6 py-3 bg-gray-900 text-white text-xs font-bold rounded-xl hover:bg-blue-600 transition-all shadow-lg"
                             >
                               {t(language, 'library.study')}
@@ -353,6 +388,7 @@ const App: React.FC = () => {
           <div className="flex-1 flex overflow-hidden">
             <CardPlayer 
               cards={activeDeck.cards} 
+              deckTitle={activeDeck.title}
               onActiveCardChange={setActiveCard} 
               language={language}
             />
@@ -386,7 +422,7 @@ const App: React.FC = () => {
             deck={editingDeck} 
             onSave={handleUpdateDeck} 
             onCancel={() => setCurrentSection(AppSection.LIBRARY)}
-            onStartLearning={(d) => { setActiveDeck(d); setCurrentSection(AppSection.LEARNING); }}
+            onStartLearning={(d) => { handleSetActiveDeck(d); setCurrentSection(AppSection.LEARNING); }}
             onPublish={handlePublishToStore}
             isPublished={storeDecks.some(sd => sd.originDeckId === editingDeck.id)}
             isPublishing={isPublishing === editingDeck.id}

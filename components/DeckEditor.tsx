@@ -97,7 +97,8 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
       audioUrl: '#',
       breakdown: [],
       grammarNote: '',
-      context: ''
+      context: '',
+      repeatCount: 3
     };
     const newCards = [...editedDeck.cards, newCard].sort((a, b) => a.id.localeCompare(b.id));
     setEditedDeck({ ...editedDeck, cards: newCards });
@@ -311,9 +312,12 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
                   <span className="text-[10px] text-gray-300 mr-1.5 tabular-nums">#{idx + 1}</span>
                   {card.text || '(Empty Card)'}
                 </p>
-                {card.audioUrl !== '#' && (
-                   <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">MP3</span>
-                )}
+                <div className="flex items-center gap-1.5">
+                   {card.audioUrl !== '#' && (
+                     <span className="text-[10px] bg-green-100 text-green-700 px-1 py-0.5 rounded font-bold">MP3</span>
+                   )}
+                   <span className="text-[10px] bg-gray-100 text-gray-500 px-1 py-0.5 rounded font-mono">x{card.repeatCount || 3}</span>
+                </div>
                 <button 
                   onClick={(e) => deleteCard(idx, e)}
                   className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -348,31 +352,33 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
             <div className="flex gap-3">
                <button onClick={onCancel} className="px-4 py-2 text-sm text-gray-400 font-bold hover:text-gray-600 transition-colors">{t(language, 'editor.cancel')}</button>
                
-               <button 
-                onClick={handleStorePublish}
-                disabled={isPublishing}
-                title={isPublished ? (language === 'zh' ? '同步更改到商城' : 'Sync changes to store') : (language === 'zh' ? '发布到商城' : 'Publish to store')}
-                className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border shadow-sm ${
-                  isPublished 
-                    ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' 
-                    : 'bg-white text-gray-500 border-gray-200 hover:text-blue-600 hover:border-blue-200'
-                } disabled:opacity-50`}
-               >
-                 {isPublishing ? (
-                    <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                 ) : (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      {isPublished 
-                        ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                      }
-                    </svg>
-                 )}
-                 {isPublished 
-                    ? (language === 'zh' ? '更新到商城' : 'UPDATE STORE') 
-                    : (language === 'zh' ? '发布到商城' : 'PUBLISH TO STORE')
-                 }
-               </button>
+               {!editedDeck.isSubscribed && (
+                 <button 
+                  onClick={handleStorePublish}
+                  disabled={isPublishing}
+                  title={isPublished ? (language === 'zh' ? '同步更改到商城' : 'Sync changes to store') : (language === 'zh' ? '发布到商城' : 'Publish to store')}
+                  className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border shadow-sm ${
+                    isPublished 
+                      ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' 
+                      : 'bg-white text-gray-500 border-gray-200 hover:text-blue-600 hover:border-blue-200'
+                  } disabled:opacity-50`}
+                 >
+                   {isPublishing ? (
+                      <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                   ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        {isPublished 
+                          ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                        }
+                      </svg>
+                   )}
+                   {isPublished 
+                      ? (language === 'zh' ? '更新到商城' : 'UPDATE STORE') 
+                      : (language === 'zh' ? '发布到商城' : 'PUBLISH TO STORE')
+                   }
+                 </button>
+               )}
 
                <button 
                 onClick={handleManualSave} 
@@ -448,18 +454,9 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
                     />
                 </div>
              </section>
-
-             <div className="p-8 bg-blue-50/30 border border-blue-100 rounded-[32px] flex items-center gap-6 shadow-sm">
-                <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-2xl shadow-sm border border-blue-50 flex-shrink-0">📊</div>
-                <div className="flex-1">
-                   <p className="text-sm font-bold text-blue-900">Deck Statistics</p>
-                   <p className="text-xs text-blue-700/60 font-medium mt-0.5">This resource pack currently contains <span className="font-bold text-blue-600 underline underline-offset-4">{editedDeck.cards.length} learning cards</span>. Use the sidebar to navigate through them.</p>
-                </div>
-             </div>
           </div>
         ) : activeCard ? (
           <div className="max-w-4xl mx-auto space-y-12 pb-32 animate-in fade-in duration-300">
-             {/* Card Editing UI */}
              <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 flex items-center justify-between group">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform">
@@ -478,6 +475,31 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
                   {isAnalyzing && <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>}
                   {isAnalyzing ? t(language, 'learning.analyzing') : t(language, 'learning.deepDive')}
                 </button>
+             </div>
+
+             {/* Repeat Count Editor Section */}
+             <div className="bg-gray-50/50 border border-gray-100 rounded-3xl p-8 flex items-center justify-between">
+                <div className="space-y-1">
+                   <h4 className="text-sm font-bold text-gray-800">Card Repeat Cycle (复读次数)</h4>
+                   <p className="text-xs text-gray-400">Specify how many times the audio should loop during study mode.</p>
+                </div>
+                <div className="flex items-center gap-3 bg-white border border-gray-100 rounded-2xl p-2 shadow-sm">
+                   <button 
+                    onClick={() => handleCardChange('repeatCount', Math.max(1, (activeCard.repeatCount || 3) - 1))}
+                    className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                   >
+                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" /></svg>
+                   </button>
+                   <div className="w-12 text-center font-black text-xl text-blue-600 tabular-nums">
+                     {activeCard.repeatCount || 3}
+                   </div>
+                   <button 
+                    onClick={() => handleCardChange('repeatCount', Math.min(20, (activeCard.repeatCount || 3) + 1))}
+                    className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                   >
+                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                   </button>
+                </div>
              </div>
 
              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

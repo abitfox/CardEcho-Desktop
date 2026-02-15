@@ -14,8 +14,9 @@ export interface Card {
   breakdown: WordBreakdown[];
   context: string;
   grammarNote: string;
-  voiceName?: string; // 新增：朗读者姓名
-  audioDuration?: number; // 新增：音频时长（秒）
+  voiceName?: string; // 朗读者姓名
+  audioDuration?: number; // 音频时长（秒）
+  repeatCount: number; // 新增：复读次数 (3-5)
 }
 
 export interface Deck {

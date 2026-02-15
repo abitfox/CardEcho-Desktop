@@ -167,7 +167,8 @@ export const cloudService = {
           grammarNote: c.grammar_note, 
           breakdown: c.breakdown,
           voiceName: c.voice_name,
-          audioDuration: c.audio_duration
+          audioDuration: c.audio_duration,
+          repeatCount: c.repeat_count || 3 // 映射复读次数
         })).sort((a: any, b: any) => a.id.localeCompare(b.id))
       }));
     } catch (err: any) {
@@ -208,7 +209,8 @@ export const cloudService = {
         grammar_note: card.grammarNote,
         breakdown: card.breakdown,
         voice_name: card.voiceName,
-        audio_duration: card.audioDuration
+        audio_duration: card.audioDuration,
+        repeat_count: card.repeatCount || 3 // 同步复读次数
       }));
       await supabase.from('store_cards').insert(cardsToInsert);
     } else {
@@ -238,7 +240,8 @@ export const cloudService = {
         grammar_note: card.grammarNote,
         breakdown: card.breakdown,
         voice_name: card.voiceName,
-        audio_duration: card.audioDuration
+        audio_duration: card.audioDuration,
+        repeat_count: card.repeatCount || 3 // 同步复读次数
       }));
       await supabase.from('store_cards').insert(cardsToInsert);
     }
@@ -289,7 +292,8 @@ export const cloudService = {
           grammar_note: card.grammarNote,
           breakdown: card.breakdown,
           voice_name: card.voiceName,
-          audio_duration: card.audioDuration
+          audio_duration: card.audioDuration,
+          repeat_count: card.repeatCount || 3
         }));
         await supabase.from('store_cards').insert(cardsToInsert);
       } catch (err: any) {
@@ -355,7 +359,8 @@ export const cloudService = {
         grammar_note: card.grammarNote,
         breakdown: card.breakdown,
         voice_name: card.voiceName,
-        audio_duration: card.audioDuration
+        audio_duration: card.audioDuration,
+        repeat_count: card.repeatCount || 3 // 同步库中的复读次数
       }));
       const { error: cardError } = await supabase.from('cards').upsert(cardsToInsert);
       if (cardError) throw cardError;
@@ -381,7 +386,8 @@ export const cloudService = {
         audioUrl: c.audio_url, 
         grammarNote: c.grammar_note,
         voiceName: c.voice_name,
-        audioDuration: c.audio_duration
+        audioDuration: c.audio_duration,
+        repeatCount: c.repeat_count || 3 // 映射复读次数
       })).sort((a: any, b: any) => a.id.localeCompare(b.id))
     }));
   },

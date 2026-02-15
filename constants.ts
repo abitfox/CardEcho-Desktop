@@ -16,6 +16,8 @@ export const MOCK_LIBRARY_DECKS: Deck[] = [
         audioUrl: "#",
         context: "Commonly used in meetings to return to a previous topic.",
         grammarNote: "Phrasal verb 'circle back' means to revisit or return to a subject later.",
+        // Fix: Add repeatCount to meet Card interface requirements
+        repeatCount: 3,
         breakdown: [
           { word: "circle back", phonetic: "/ˈsɜːrkl bæk/", meaning: "回到", role: "Phrasal Verb" },
           { word: "budget", phonetic: "/ˈbʌdʒɪt/", meaning: "预算", role: "Noun" },
@@ -29,6 +31,8 @@ export const MOCK_LIBRARY_DECKS: Deck[] = [
         audioUrl: "#",
         context: "Project management context.",
         grammarNote: "'Aligned' implies being in agreement or having the same understanding.",
+        // Fix: Add repeatCount to meet Card interface requirements
+        repeatCount: 3,
         breakdown: [
           { word: "stakeholders", phonetic: "/ˈsteɪkhoʊldərz/", meaning: "利益相关者", role: "Noun" },
           { word: "aligned", phonetic: "/əˈlaɪnd/", meaning: "达成一致", role: "Adjective" }
@@ -54,6 +58,8 @@ export const MOCK_STORE_DECKS: Deck[] = [
         audioUrl: "#",
         context: "The fundamental element of Western philosophy by René Descartes.",
         grammarNote: "'Therefore' is a conjunctive adverb used to indicate a logical result.",
+        // Fix: Add repeatCount to meet Card interface requirements
+        repeatCount: 3,
         breakdown: [
           { word: "therefore", phonetic: "/ˈðerfɔːr/", meaning: "因此", role: "Adverb" },
           { word: "exist", phonetic: "/ɪɡˈzɪst/", meaning: "存在", role: "Verb" }
@@ -76,6 +82,8 @@ export const MOCK_STORE_DECKS: Deck[] = [
         audioUrl: "#",
         context: "Commonly used when a startup changes its business direction.",
         grammarNote: "'Pivot' in a business context means to change direction significantly.",
+        // Fix: Add repeatCount to meet Card interface requirements
+        repeatCount: 3,
         breakdown: [
           { word: "pivot", phonetic: "/ˈpɪvət/", meaning: "转向/支点", role: "Verb" },
           { word: "fit", phonetic: "/fɪt/", meaning: "契合/合适", role: "Noun" }
@@ -98,6 +106,8 @@ export const MOCK_STORE_DECKS: Deck[] = [
         audioUrl: "#",
         context: "A professional cooking term for gathering and prepping ingredients.",
         grammarNote: "This is a French loanword used widely in professional English kitchens.",
+        // Fix: Add repeatCount to meet Card interface requirements
+        repeatCount: 3,
         breakdown: [
           { word: "essential", phonetic: "/ɪˈsenʃl/", meaning: "必要的", role: "Adjective" },
           { word: "operation", phonetic: "/ˌɒpəˈreɪʃn/", meaning: "运转/操作", role: "Noun" }
