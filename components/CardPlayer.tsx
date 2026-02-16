@@ -8,42 +8,36 @@ interface CardPlayerProps {
   cards: Card[];
   deckTitle: string;
   onActiveCardChange: (card: Card) => void;
+  onCardComplete?: (cardId: string) => void; // 新增回调
   language: Language;
 }
 
 const STORAGE_KEY_AUTO_NEXT = 'cardecho_auto_next';
 
-const CardPlayer: React.FC<CardPlayerProps> = ({ cards, deckTitle, onActiveCardChange, language }) => {
+const CardPlayer: React.FC<CardPlayerProps> = ({ cards, deckTitle, onActiveCardChange, onCardComplete, language }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [currentRepeat, setCurrentRepeat] = useState(0);
   
-  // 记住“自动切换”的状态
   const [isAutoNext, setIsAutoNext] = useState(() => {
     return localStorage.getItem(STORAGE_KEY_AUTO_NEXT) === 'true';
   });
   
-  // 使用 Ref 解决异步闭包中的状态滞后问题
   const isAutoNextRef = useRef(isAutoNext);
-  const playbackSpeedRef = useRef(playbackSpeed); // 新增语速 Ref
-  
-  // 核心播放锁，防止重复启动 loop
+  const playbackSpeedRef = useRef(playbackSpeed);
   const isLoopingRef = useRef(false);
 
-  // 同步 Ref 和持久化设置
   useEffect(() => {
     isAutoNextRef.current = isAutoNext;
     localStorage.setItem(STORAGE_KEY_AUTO_NEXT, String(isAutoNext));
   }, [isAutoNext]);
 
-  // 始终保持语速 Ref 最新
   useEffect(() => {
     playbackSpeedRef.current = playbackSpeed;
   }, [playbackSpeed]);
 
-  // Handle scroll and update active card
   const handleScroll = () => {
     if (!containerRef.current) return;
     const scrollPos = containerRef.current.scrollTop;
@@ -77,24 +71,28 @@ const CardPlayer: React.FC<CardPlayerProps> = ({ cards, deckTitle, onActiveCardC
     setIsPlaying(true);
     
     const totalRepeats = currentCard.repeatCount || 3;
+    let completedFullCycle = false;
     
     try {
       for (let i = 1; i <= totalRepeats; i++) {
-        // 核心检查点：确保循环未被中断
         if (!isLoopingRef.current || activeIdx !== index) break;
         
         setCurrentRepeat(i);
-        // 使用 Ref 确保拿到的是实时语速
         await playAudio(currentCard.audioUrl, playbackSpeedRef.current);
         
-        // 句间微小停顿，增加自然感
         if (i < totalRepeats) {
           await new Promise(resolve => setTimeout(resolve, 500));
+        } else {
+          completedFullCycle = true;
         }
       }
       
-      // 循环结束逻辑
       if (activeIdx === index) {
+        // 如果完整听完了复读，触发完成回调
+        if (completedFullCycle) {
+          onCardComplete?.(currentCard.id);
+        }
+
         if (isAutoNextRef.current && index < cards.length - 1) {
           setTimeout(scrollToNext, 800);
         } else {
@@ -122,26 +120,23 @@ const CardPlayer: React.FC<CardPlayerProps> = ({ cards, deckTitle, onActiveCardC
 
   const changeSpeed = (speed: number) => {
     setPlaybackSpeed(speed);
-    playbackSpeedRef.current = speed; // 立即同步 Ref
+    playbackSpeedRef.current = speed;
     
     if (isPlaying) {
       stopAllAudio();
       isLoopingRef.current = false;
-      // 稍微延迟重启，确保旧的 async 任务响应 isLoopingRef 的变化
       setTimeout(() => {
         startPlaybackLoop(activeIdx);
       }, 50);
     }
   };
 
-  // Broadcast initial card on mount or cards change
   useEffect(() => {
     if (cards.length > 0) {
       onActiveCardChange(cards[0]);
     }
   }, [cards]);
 
-  // 当索引改变时，重置并自动开始（如果适用）
   useEffect(() => {
     stopAllAudio();
     isLoopingRef.current = false;
@@ -159,7 +154,6 @@ const CardPlayer: React.FC<CardPlayerProps> = ({ cards, deckTitle, onActiveCardC
     };
   }, [activeIdx]);
 
-  // Global Hotkeys
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && e.target === document.body) {

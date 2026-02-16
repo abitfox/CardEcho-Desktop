@@ -40,6 +40,9 @@ export interface User {
   name: string;
   avatar?: string;
   role?: number; // 1: Admin, 2: VIP, others/null: Regular
+  // Add dailyGoal and streak to match usage in cloudService.ts
+  dailyGoal?: number;
+  streak?: number;
 }
 
 export type Language = 'en' | 'zh';

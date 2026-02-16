@@ -14,6 +14,19 @@ const translations = {
       cards: 'cards',
       logout: 'Logout'
     },
+    progressModal: {
+      title: 'Study Check-in',
+      todayStats: "Today's Achievement",
+      activityLog: 'Activity Footprints',
+      rules: 'Check-in Rules',
+      rule1: '1. Daily goal resets at 0:00 (Local Time).',
+      rule2: '2. Reach your Daily Goal to maintain your Streak.',
+      rule3: '3. Each unique card studied counts once toward progress.',
+      learnedAt: 'Learned at',
+      noActivity: 'No study activity yet today. Go for it!',
+      streakLong: 'Day Streak',
+      goalReached: 'Daily Goal Reached!'
+    },
     settings: {
       title: 'Account Settings',
       desc: 'Manage your profile information and account preferences.',
@@ -113,6 +126,19 @@ const translations = {
       progress: '今日进度',
       cards: '张卡片',
       logout: '退出登录'
+    },
+    progressModal: {
+      title: '打卡详情',
+      todayStats: '今日战果',
+      activityLog: '学习足迹',
+      rules: '打卡规则',
+      rule1: '1. 每日学习进度在凌晨 00:00 自动重置。',
+      rule2: '2. 只有达到设定的“每日目标”后，连续天数 (Streak) 才会增长。',
+      rule3: '3. 重复复读同一张卡片多次，仅计入 1 张今日进度。',
+      learnedAt: '学习于',
+      noActivity: '今日尚未开始学习，快去挑战吧！',
+      streakLong: '天连续打卡',
+      goalReached: '今日目标已达成！'
     },
     settings: {
       title: '账号设置',

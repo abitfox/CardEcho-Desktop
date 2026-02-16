@@ -9,28 +9,57 @@ interface SidebarProps {
   user: User | null;
   onLogout: () => void;
   language: Language;
-  hasDecks: boolean; // 新增：标识当前用户是否有学习资源
+  hasDecks: boolean;
+  studiedCount: number;
+  dailyGoal: number;
+  onProgressClick: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentSection, onSectionChange, user, onLogout, language, hasDecks }) => {
+const Sidebar: React.FC<SidebarProps> = ({ 
+  currentSection, 
+  onSectionChange, 
+  user, 
+  onLogout, 
+  language, 
+  hasDecks, 
+  studiedCount, 
+  dailyGoal,
+  onProgressClick
+}) => {
   const menuItems = [
     { id: AppSection.LIBRARY, label: t(language, 'sidebar.library'), icon: '📚' },
     { id: AppSection.STORE, label: t(language, 'sidebar.store'), icon: '🛒' },
     { id: AppSection.CREATE, label: t(language, 'sidebar.create'), icon: '➕' },
-    // 仅在有资源包时显示学习模式
     ...(hasDecks ? [{ id: AppSection.LEARNING, label: t(language, 'sidebar.learning'), icon: '🎧' }] : []),
     { id: AppSection.STATISTICS, label: t(language, 'sidebar.stats'), icon: '📊' },
     { id: AppSection.SETTINGS, label: t(language, 'sidebar.settings'), icon: '⚙️' },
   ];
 
+  const progressPercent = Math.min(100, Math.round((studiedCount / dailyGoal) * 100));
+
   return (
     <div className="w-64 bg-[#f1f3f4] h-full flex flex-col border-r border-gray-200">
       <div className="p-6">
-        <div className="flex items-center gap-2 mb-8">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-            <span className="text-white text-xl font-bold italic">CE</span>
+        {/* NEW REDESIGNED LOGO */}
+        <div className="flex items-center gap-3 mb-10 group cursor-pointer" onClick={() => onSectionChange(AppSection.LIBRARY)}>
+          <div className="relative w-11 h-11 flex items-center justify-center">
+            {/* Background Glow */}
+            <div className="absolute inset-0 bg-blue-600/20 blur-xl rounded-full scale-75 group-hover:scale-110 transition-transform duration-500"></div>
+            
+            {/* Icon Container */}
+            <div className="relative w-full h-full bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-[0_8px_16px_rgba(37,99,235,0.25)] flex items-end justify-center gap-[3px] p-2.5 overflow-hidden transition-all duration-300 group-hover:shadow-[0_12px_24px_rgba(37,99,235,0.35)] active:scale-95">
+              <div className="w-1.5 h-3 bg-white/40 rounded-full group-hover:h-5 transition-all duration-300"></div>
+              <div className="w-1.5 h-6 bg-white rounded-full group-hover:h-4 transition-all duration-300"></div>
+              <div className="w-1.5 h-4 bg-white/70 rounded-full group-hover:h-6 transition-all duration-300"></div>
+              
+              {/* Subtle Card Layer Overlay */}
+              <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-bl from-white/10 to-transparent pointer-events-none"></div>
+            </div>
           </div>
-          <span className="text-xl font-semibold tracking-tight text-gray-800">CardEcho</span>
+          <div className="flex flex-col">
+            <span className="text-xl font-black tracking-tight text-gray-900 leading-none">CardEcho</span>
+            <span className="text-[10px] font-bold text-blue-600/60 uppercase tracking-widest mt-1">Linguistics AI</span>
+          </div>
         </div>
 
         <nav className="space-y-1">
@@ -52,19 +81,29 @@ const Sidebar: React.FC<SidebarProps> = ({ currentSection, onSectionChange, user
       </div>
 
       <div className="mt-auto p-4 space-y-4">
-        {/* Progress Card */}
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-          <p className="text-xs text-gray-500 mb-1">{t(language, 'sidebar.progress')}</p>
+        {/* Clickable Progress Card */}
+        <button 
+          onClick={onProgressClick}
+          className="w-full text-left bg-white p-4 rounded-xl shadow-sm border border-gray-100 group hover:shadow-md hover:border-blue-200 transition-all active:scale-[0.98]"
+        >
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-gray-400 group-hover:text-blue-500 transition-colors font-bold">{t(language, 'sidebar.progress')}</p>
+            <span className="text-[10px] text-gray-300">DETAILS ➔</span>
+          </div>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-bold">12 / 50 {t(language, 'sidebar.cards')}</span>
-            <span className="text-xs font-semibold text-blue-600">24%</span>
+            <span className="text-sm font-bold">{studiedCount} / {dailyGoal}</span>
+            <span className={`text-xs font-black ${progressPercent >= 100 ? 'text-green-600' : 'text-blue-600'}`}>
+              {progressPercent}%
+            </span>
           </div>
-          <div className="w-full bg-gray-100 rounded-full h-1.5">
-            <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: '24%' }}></div>
+          <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+            <div 
+              className={`h-full transition-all duration-1000 ease-out shadow-sm ${progressPercent >= 100 ? 'bg-green-500' : 'bg-blue-600'}`} 
+              style={{ width: `${progressPercent}%` }}
+            ></div>
           </div>
-        </div>
+        </button>
 
-        {/* User Profile Area */}
         {user && (
           <div className="flex items-center justify-between p-2 hover:bg-gray-200 rounded-xl transition-colors group">
             <button 
