@@ -142,23 +142,16 @@ const App: React.FC = () => {
   if (isLoading) {
     return (
       <div className="h-screen w-screen bg-[#f8f9fa] flex flex-col items-center justify-center p-12 transition-all duration-1000">
-        {/* ENHANCED LOGO LOADING SCREEN */}
         <div className="relative mb-12 animate-in fade-in zoom-in-95 duration-1000">
-          {/* Background Ambient Glow */}
           <div className="absolute inset-0 bg-blue-600/20 blur-[100px] rounded-full scale-150 animate-pulse"></div>
-          
-          {/* Animated Logo Icon */}
           <div className="relative w-28 h-28 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-[32px] shadow-[0_24px_48px_rgba(37,99,235,0.3)] flex items-end justify-center gap-[6px] p-7 overflow-hidden active:scale-95 transition-transform">
             <div className="w-3.5 h-1/3 bg-white/40 rounded-full animate-bounce [animation-duration:1.2s] [animation-delay:-0.4s]"></div>
             <div className="w-3.5 h-full bg-white rounded-full animate-bounce [animation-duration:1.2s] [animation-delay:-0.2s]"></div>
             <div className="w-3.5 h-1/2 bg-white/70 rounded-full animate-bounce [animation-duration:1.2s]"></div>
-            
-            {/* Gloss Effect */}
             <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-bl from-white/20 to-transparent pointer-events-none"></div>
           </div>
         </div>
 
-        {/* Branding & Status */}
         <div className="flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
           <h1 className="text-4xl font-black text-gray-900 tracking-tight leading-none">CardEcho</h1>
           <p className="text-[10px] font-black text-blue-600/60 uppercase tracking-[0.4em] mt-3 mb-10">Linguistics AI</p>
@@ -250,7 +243,14 @@ const App: React.FC = () => {
             deck={editingDeck} 
             language={language} 
             onCancel={() => {setEditingDeck(null); setCurrentSection(AppSection.LIBRARY);}} 
-            onSave={async (d) => { await cloudService.saveDeck(d, currentUser.id); const updated = await cloudService.fetchUserDecks(currentUser.id); setDecks(updated); }}
+            onSave={async (d) => { 
+              await cloudService.saveDeck(d, currentUser.id); 
+              const updated = await cloudService.fetchUserDecks(currentUser.id); 
+              setDecks(updated); 
+              // 关键修复：同步更新当前正在编辑的卡片包状态，确保编辑器知道已保存
+              const freshDeck = updated.find(item => item.id === d.id);
+              if (freshDeck) setEditingDeck(freshDeck);
+            }}
             onStartLearning={(d) => { handleSetActiveDeck(d); setCurrentSection(AppSection.LEARNING); }}
             onPublish={async (d) => { await cloudService.publishToStore(d, currentUser.id, currentUser.name); await loadStoreData(); }}
             isPublished={storeDecks.some(sd => sd.originDeckId === editingDeck.id)}
@@ -259,7 +259,6 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* 打卡详情全屏弹窗 */}
       {isProgressModalOpen && (
         <StudyProgressModal 
           user={currentUser} 

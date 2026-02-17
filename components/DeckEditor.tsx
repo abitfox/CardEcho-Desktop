@@ -46,6 +46,7 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
     const isDirty = JSON.stringify(deck) !== JSON.stringify(editedDeck);
     setHasChanges(isDirty);
     
+    // 自动重置保存状态的逻辑移至 handleManualSave 或由 prop 同步触发
     if (!isDirty && saveStatus === 'saving') {
       setSaveStatus('saved');
       const timer = setTimeout(() => setSaveStatus('idle'), 3000);
@@ -155,6 +156,7 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
           const updatedDeck = { ...editedDeck, cards: newCards };
           setEditedDeck(updatedDeck);
           await onSave(updatedDeck);
+          // 保存成功后由 useEffect 处理或此处显式处理
         }
       } else {
         setSaveStatus('idle');
@@ -210,6 +212,7 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
       setEditedDeck(updatedDeck);
       await onSave(updatedDeck);
       setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 3000);
 
       if (quotaExceeded) {
         alert("由于配额限制，部分卡片未能生成音频。请稍后点击‘批量生成’重试。");
@@ -243,6 +246,10 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
     setSaveStatus('saving');
     try {
       await onSave(editedDeck);
+      // 显式设置保存成功状态，并强制清除 dirty 标记
+      setSaveStatus('saved');
+      setHasChanges(false);
+      setTimeout(() => setSaveStatus('idle'), 3000);
     } catch (err) {
       console.error("Manual save failed", err);
       setSaveStatus('idle');
@@ -276,10 +283,10 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
     <div className="flex h-full bg-white overflow-hidden relative">
       {/* Success Notification */}
       {saveStatus === 'saved' && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
-          <div className="bg-green-600 text-white px-6 py-2 rounded-full shadow-2xl flex items-center gap-2 text-sm font-bold">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
-            {isBatchGenerating ? t(language, 'editor.batchProcessing') : t(language, 'editor.synced')}
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="bg-green-600 text-white px-8 py-3 rounded-full shadow-2xl flex items-center gap-3 text-sm font-bold border border-green-500">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
+            {isBatchGenerating ? t(language, 'editor.batchSuccess') : t(language, 'editor.synced')}
           </div>
         </div>
       )}
@@ -341,7 +348,6 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
 
       {/* Main Panel */}
       <div className="flex-1 overflow-y-auto p-12 bg-white custom-scrollbar">
-        {/* Persistent Editor Header */}
         <div className="max-w-4xl mx-auto flex justify-between items-center mb-12">
             <div>
                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{activeCardIdx === null ? 'Deck Settings' : t(language, 'editor.title')}</h2>
@@ -384,12 +390,12 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
                 onClick={handleManualSave} 
                 disabled={!hasChanges || saveStatus === 'saving'}
                 className={`px-6 py-2 rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95 ${
-                  !hasChanges 
+                  !hasChanges && saveStatus === 'idle'
                     ? 'bg-gray-100 text-gray-400 cursor-default shadow-none' 
                     : 'bg-white border-2 border-blue-600 text-blue-600 hover:bg-blue-50'
                 }`}
                >
-                  {saveStatus === 'saving' ? t(language, 'editor.syncing') : t(language, 'editor.save')}
+                  {saveStatus === 'saving' ? t(language, 'editor.syncing') : (saveStatus === 'saved' ? '✓ ' + t(language, 'editor.save') : t(language, 'editor.save'))}
                </button>
                <button 
                 onClick={handleStartLearning}
@@ -477,7 +483,6 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
                 </button>
              </div>
 
-             {/* Repeat Count Editor Section */}
              <div className="bg-gray-50/50 border border-gray-100 rounded-3xl p-8 flex items-center justify-between">
                 <div className="space-y-1">
                    <h4 className="text-sm font-bold text-gray-800">Card Repeat Cycle (复读次数)</h4>

@@ -209,8 +209,8 @@ export const cloudService = {
       author: d.author,
       createdBy: d.user_id,
       createdAt: new Date(d.created_at).getTime(),
-      // Fix: Cast tags explicitly (Error line 154)
-      tags: (d.tags as string[]) || [],
+      // Fix: Use any cast to allow unknown[] to string[] assignment
+      tags: (d.tags as any as string[]) || [],
       originDeckId: d.origin_deck_id,
       cards: (d.store_cards || []).map((c: any) => ({
         id: c.id,
@@ -218,7 +218,6 @@ export const cloudService = {
         translation: c.translation,
         audioUrl: c.audio_url,
         context: c.context,
-        // Fix: Use camelCase for Card interface properties to avoid issues in UI
         grammarNote: c.grammar_note,
         breakdown: c.breakdown,
         voiceName: c.voice_name,
@@ -237,7 +236,8 @@ export const cloudService = {
       await supabase.from('store_cards').insert(cardsToInsert as any);
     } else {
       const { data: newStoreDeck } = await supabase.from('store_decks').insert({ title: deck.title, description: deck.description, icon: deck.icon, source_text: deck.sourceText, author: userName, user_id: userId, origin_deck_id: deck.id, tags: deck.tags || [] }).select().single();
-      const cardsToInsert = deck.cards.map(card => ({ deck_id: newStoreDeck.id, text: card.text, translation: card.translation, audio_url: card.audioUrl, context: card.context, grammar_note: card.grammar_note, breakdown: card.breakdown, voice_name: card.voiceName, audio_duration: card.audioDuration, repeat_count: card.repeatCount || 3 }));
+      // Fix line 176: Correct property names from snake_case to camelCase when accessing Card object
+      const cardsToInsert = deck.cards.map(card => ({ deck_id: newStoreDeck.id, text: card.text, translation: card.translation, audio_url: card.audioUrl, context: card.context, grammar_note: card.grammarNote, breakdown: card.breakdown, voice_name: card.voiceName, audio_duration: card.audioDuration, repeat_count: card.repeatCount || 3 }));
       await supabase.from('store_cards').insert(cardsToInsert as any);
     }
   },
@@ -245,6 +245,7 @@ export const cloudService = {
   async saveDeck(deck: Deck, userId: string): Promise<void> {
     await supabase.from('decks').upsert({ id: deck.id, user_id: userId, title: deck.title, description: deck.description, icon: deck.icon, source_text: deck.sourceText, is_subscribed: deck.isSubscribed || false, author: deck.author, created_at: new Date(deck.createdAt).toISOString() });
     if (deck.cards.length > 0) {
+      // Line 240: Ensure using camelCase for property access on the Card object
       const cardsToInsert = deck.cards.map(card => ({ id: card.id, deck_id: deck.id, text: card.text, translation: card.translation, audio_url: card.audioUrl, context: card.context, grammar_note: card.grammarNote, breakdown: card.breakdown, voice_name: card.voiceName, audio_duration: card.audioDuration, repeat_count: card.repeatCount || 3 }));
       await supabase.from('cards').upsert(cardsToInsert as any);
     }
@@ -263,8 +264,8 @@ export const cloudService = {
       author: d.author,
       createdBy: d.user_id,
       createdAt: new Date(d.created_at).getTime(),
-      // Fix: Cast tags to string[]
-      tags: (d.tags as string[]) || [],
+      // Fix: Use any cast to allow unknown[] to string[] assignment
+      tags: (d.tags as any as string[]) || [],
       cards: (d.cards || []).map((c: any) => ({
         id: c.id,
         text: c.text,
@@ -313,7 +314,6 @@ export const cloudService = {
         const { data: existing } = await supabase.from('store_decks').select('id').eq('title', deck.title).maybeSingle();
         if (existing) continue;
         const { data: newDeck } = await supabase.from('store_decks').insert({ title: deck.title, description: deck.description, icon: deck.icon, source_text: deck.sourceText, author: deck.author, tags: deck.tags || [] }).select().single();
-        // Fix: Use card.audioDuration instead of card.audio_duration (Error line 328)
         const cardsToInsert = deck.cards.map(card => ({ 
           deck_id: newDeck.id, 
           text: card.text, 
