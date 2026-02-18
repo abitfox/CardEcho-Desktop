@@ -84,19 +84,17 @@ export const cloudService = {
     return null;
   },
 
-  // --- STUDY TRACKING (DB Persistence) ---
+  // --- STUDY TRACKING ---
   
   async logCardCompletion(userId: string, cardId: string, deckId: string): Promise<{ todayCount: number, currentStreak: number }> {
     const todayStr = new Date().toISOString().split('T')[0];
 
-    // 1. 记录到流水表
     await supabase.from('study_logs').insert({
       user_id: userId,
       card_id: cardId,
       deck_id: deckId
     });
 
-    // 2. 获取今日去重后的已完成卡片数
     const { data: todayLogs } = await supabase
       .from('study_logs')
       .select('card_id')
@@ -106,7 +104,6 @@ export const cloudService = {
     const uniqueCards = new Set((todayLogs || []).map(l => l.card_id));
     const todayCount = uniqueCards.size;
 
-    // 3. 维护 Streak
     const { data: profile } = await supabase.from('profiles')
       .select('streak, daily_goal, last_study_date')
       .eq('id', userId)
@@ -147,7 +144,7 @@ export const cloudService = {
         supabase.from('profiles').select('streak').eq('id', userId).maybeSingle()
       ]);
 
-      const todayCardIds = Array.from(new Set((todayRes.data || []).map(l => l.card_id)));
+      const todayCardIds: string[] = Array.from(new Set<string>((todayRes.data || []).map((l: any) => String(l.card_id))));
       const allTimeCount = allTimeRes.count || 0;
       const streak = profileRes.data?.streak || 0;
 
@@ -158,9 +155,6 @@ export const cloudService = {
     }
   },
 
-  /**
-   * 获取今日详细打卡记录详情
-   */
   async getDetailedTodayLogs(userId: string): Promise<{ card_id: string, studied_at: string, card_text: string }[]> {
     const todayStr = new Date().toISOString().split('T')[0];
     const { data, error } = await supabase
@@ -171,7 +165,6 @@ export const cloudService = {
       .order('studied_at', { ascending: false });
     
     if (error) {
-      // Fallback if cards relationship fails
       const { data: simpleData } = await supabase
         .from('study_logs')
         .select('card_id, studied_at')
@@ -194,12 +187,24 @@ export const cloudService = {
 
   // --- DECKS & STORE ---
   async fetchStoreDecks(): Promise<Deck[]> {
-    const { data, error } = await supabase
+    // 尝试查询。如果数据库中没有 updated_at，SQL 会报错，从而导致不出结果。
+    // 这里增加一个 fallback，如果报错，尝试按 created_at 排序。
+    let { data, error } = await supabase
       .from('store_decks')
-      .select(`id, title, description, icon, source_text, author, user_id, created_at, tags, origin_deck_id, store_cards (*)`)
-      .order('created_at', { ascending: false });
+      .select(`id, title, description, icon, source_text, author, user_id, created_at, updated_at, tags, origin_deck_id, store_cards (*)`)
+      .order('updated_at', { ascending: false });
     
-    if (error) throw error;
+    if (error) {
+      console.warn("Sorting by updated_at failed, falling back to created_at:", error.message);
+      const fallback = await supabase
+        .from('store_decks')
+        .select(`id, title, description, icon, source_text, author, user_id, created_at, tags, origin_deck_id, store_cards (*)`)
+        .order('created_at', { ascending: false });
+      
+      if (fallback.error) throw fallback.error;
+      data = fallback.data;
+    }
+
     return (data || []).map((d: any) => ({
       id: d.id,
       title: d.title,
@@ -209,7 +214,7 @@ export const cloudService = {
       author: d.author,
       createdBy: d.user_id,
       createdAt: new Date(d.created_at).getTime(),
-      // Fix: Use any cast to allow unknown[] to string[] assignment
+      updatedAt: d.updated_at ? new Date(d.updated_at).getTime() : new Date(d.created_at).getTime(),
       tags: (d.tags as any as string[]) || [],
       originDeckId: d.origin_deck_id,
       cards: (d.store_cards || []).map((c: any) => ({
@@ -228,25 +233,93 @@ export const cloudService = {
   },
 
   async publishToStore(deck: Deck, userId: string, userName: string): Promise<void> {
+    const now = new Date().toISOString();
+    // 这里必须使用下划线命名与 DB 匹配
     const { data: existing } = await supabase.from('store_decks').select('id').eq('origin_deck_id', deck.id).eq('user_id', userId).maybeSingle();
+    
     if (existing) {
-      await supabase.from('store_decks').update({ description: deck.description, icon: deck.icon, source_text: deck.sourceText, author: userName, tags: deck.tags || [] }).eq('id', existing.id);
+      await supabase.from('store_decks').update({ 
+        description: deck.description, 
+        icon: deck.icon, 
+        source_text: deck.sourceText, 
+        author: userName, 
+        tags: deck.tags || [],
+        updated_at: now
+      }).eq('id', existing.id);
+      
       await supabase.from('store_cards').delete().eq('deck_id', existing.id);
-      const cardsToInsert = deck.cards.map(card => ({ deck_id: existing.id, text: card.text, translation: card.translation, audio_url: card.audioUrl, context: card.context, grammar_note: card.grammarNote, breakdown: card.breakdown, voice_name: card.voiceName, audio_duration: card.audioDuration, repeat_count: card.repeatCount || 3 }));
+      const cardsToInsert = deck.cards.map(card => ({ 
+        deck_id: existing.id, 
+        text: card.text, 
+        translation: card.translation, 
+        audio_url: card.audioUrl, 
+        context: card.context, 
+        grammar_note: card.grammarNote, 
+        breakdown: card.breakdown, 
+        voice_name: card.voiceName, 
+        audio_duration: card.audioDuration, 
+        repeat_count: card.repeatCount || 3 
+      }));
       await supabase.from('store_cards').insert(cardsToInsert as any);
     } else {
-      const { data: newStoreDeck } = await supabase.from('store_decks').insert({ title: deck.title, description: deck.description, icon: deck.icon, source_text: deck.sourceText, author: userName, user_id: userId, origin_deck_id: deck.id, tags: deck.tags || [] }).select().single();
-      // Fix line 176: Correct property names from snake_case to camelCase when accessing Card object
-      const cardsToInsert = deck.cards.map(card => ({ deck_id: newStoreDeck.id, text: card.text, translation: card.translation, audio_url: card.audioUrl, context: card.context, grammar_note: card.grammarNote, breakdown: card.breakdown, voice_name: card.voiceName, audio_duration: card.audioDuration, repeat_count: card.repeatCount || 3 }));
+      const { data: newStoreDeck, error: insertError } = await supabase.from('store_decks').insert({ 
+        title: deck.title, 
+        description: deck.description, 
+        icon: deck.icon, 
+        source_text: deck.sourceText, 
+        author: userName, 
+        user_id: userId, 
+        origin_deck_id: deck.id, 
+        tags: deck.tags || [],
+        updated_at: now
+      }).select().single();
+
+      if (insertError) throw insertError;
+
+      const cardsToInsert = deck.cards.map(card => ({ 
+        deck_id: newStoreDeck.id, 
+        text: card.text, 
+        translation: card.translation, 
+        audio_url: card.audioUrl, 
+        context: card.context, 
+        grammar_note: card.grammarNote, 
+        breakdown: card.breakdown, 
+        voice_name: card.voiceName, 
+        audio_duration: card.audioDuration, 
+        repeat_count: card.repeatCount || 3 
+      }));
       await supabase.from('store_cards').insert(cardsToInsert as any);
     }
   },
 
   async saveDeck(deck: Deck, userId: string): Promise<void> {
-    await supabase.from('decks').upsert({ id: deck.id, user_id: userId, title: deck.title, description: deck.description, icon: deck.icon, source_text: deck.sourceText, is_subscribed: deck.isSubscribed || false, author: deck.author, created_at: new Date(deck.createdAt).toISOString() });
+    const now = new Date().toISOString();
+    await supabase.from('decks').upsert({ 
+      id: deck.id, 
+      user_id: userId, 
+      title: deck.title, 
+      description: deck.description, 
+      icon: deck.icon, 
+      source_text: deck.sourceText, 
+      is_subscribed: deck.isSubscribed || false, 
+      author: deck.author, 
+      created_at: new Date(deck.createdAt).toISOString(),
+      updated_at: now
+    });
     if (deck.cards.length > 0) {
-      // Line 240: Ensure using camelCase for property access on the Card object
-      const cardsToInsert = deck.cards.map(card => ({ id: card.id, deck_id: deck.id, text: card.text, translation: card.translation, audio_url: card.audioUrl, context: card.context, grammar_note: card.grammarNote, breakdown: card.breakdown, voice_name: card.voiceName, audio_duration: card.audioDuration, repeat_count: card.repeatCount || 3 }));
+      const cardsToInsert = deck.cards.map(card => ({ 
+        id: card.id, 
+        deck_id: deck.id, 
+        text: card.text, 
+        translation: card.translation, 
+        audio_url: card.audioUrl, 
+        context: card.context, 
+        grammar_note: card.grammarNote, 
+        breakdown: card.breakdown, 
+        voice_name: card.voiceName, 
+        audio_duration: card.audioDuration, 
+        repeat_count: card.repeatCount || 3 
+      }));
       await supabase.from('cards').upsert(cardsToInsert as any);
     }
   },
@@ -264,7 +337,7 @@ export const cloudService = {
       author: d.author,
       createdBy: d.user_id,
       createdAt: new Date(d.created_at).getTime(),
-      // Fix: Use any cast to allow unknown[] to string[] assignment
+      updatedAt: d.updated_at ? new Date(d.updated_at).getTime() : new Date(d.created_at).getTime(),
       tags: (d.tags as any as string[]) || [],
       cards: (d.cards || []).map((c: any) => ({
         id: c.id,
@@ -300,7 +373,13 @@ export const cloudService = {
   },
 
   async updateStoreDeckMetadata(deckId: string, metadata: any): Promise<void> {
-    await supabase.from('store_decks').update({ title: metadata.title, description: metadata.description, icon: metadata.icon, tags: metadata.tags }).eq('id', deckId);
+    await supabase.from('store_decks').update({ 
+      title: metadata.title, 
+      description: metadata.description, 
+      icon: metadata.icon, 
+      tags: metadata.tags,
+      updated_at: new Date().toISOString()
+    }).eq('id', deckId);
   },
 
   async deleteStoreDeck(deckId: string): Promise<void> {
@@ -313,7 +392,22 @@ export const cloudService = {
       try {
         const { data: existing } = await supabase.from('store_decks').select('id').eq('title', deck.title).maybeSingle();
         if (existing) continue;
-        const { data: newDeck } = await supabase.from('store_decks').insert({ title: deck.title, description: deck.description, icon: deck.icon, source_text: deck.sourceText, author: deck.author, tags: deck.tags || [] }).select().single();
+        const now = new Date().toISOString();
+        const { data: newDeck, error: insertError } = await supabase.from('store_decks').insert({ 
+          title: deck.title, 
+          description: deck.description, 
+          icon: deck.icon, 
+          source_text: deck.sourceText, 
+          author: deck.author, 
+          tags: deck.tags || [],
+          updated_at: now
+        }).select().single();
+
+        if (insertError) {
+           console.warn("Seed insert failed, skipping:", deck.title);
+           continue;
+        }
+
         const cardsToInsert = deck.cards.map(card => ({ 
           deck_id: newDeck.id, 
           text: card.text, 
@@ -327,7 +421,9 @@ export const cloudService = {
           repeat_count: card.repeatCount || 3 
         }));
         await supabase.from('store_cards').insert(cardsToInsert as any);
-      } catch (err: any) {}
+      } catch (err: any) {
+        console.error("Seed failed for:", deck.title, err);
+      }
     }
   }
 };

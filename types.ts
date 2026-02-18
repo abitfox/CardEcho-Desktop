@@ -30,6 +30,7 @@ export interface Deck {
   author?: string;
   createdBy?: string; // User ID of the creator
   createdAt: number;
+  updatedAt?: number; // 新增：更新时间
   tags?: string[];
   originDeckId?: string; // Tracks the library ID this store listing came from
 }
@@ -40,12 +41,12 @@ export interface User {
   name: string;
   avatar?: string;
   role?: number; // 1: Admin, 2: VIP, others/null: Regular
-  // Add dailyGoal and streak to match usage in cloudService.ts
   dailyGoal?: number;
   streak?: number;
 }
 
 export type Language = 'en' | 'zh';
+export type AIModel = 'gemini-3-flash-preview' | 'gemini-3-pro-preview';
 
 export enum AppSection {
   LIBRARY = 'library',

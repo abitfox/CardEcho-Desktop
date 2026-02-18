@@ -127,10 +127,10 @@ export const playAudio = async (url: string, playbackRate: number = 1.0) => {
   }
 };
 
-export const generateEnglishMaterial = async (prompt: string): Promise<string | null> => {
+export const generateEnglishMaterial = async (prompt: string, model: string = 'gemini-3-flash-preview'): Promise<string | null> => {
   return callWithRetry(async () => {
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
+      model: model,
       contents: [{ parts: [{ text: `Instruction: ${prompt}` }] }],
       config: {
         systemInstruction: "You are an English language curriculum designer. Write a natural, educational English text under 300 words. Provide ONLY the English text.",
@@ -140,10 +140,10 @@ export const generateEnglishMaterial = async (prompt: string): Promise<string | 
   });
 };
 
-export const analyzeSentence = async (sentence: string) => {
+export const analyzeSentence = async (sentence: string, model: string = 'gemini-3-flash-preview') => {
   return callWithRetry(async () => {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: model,
       contents: [{ parts: [{ text: `Sentence to analyze: "${sentence}"` }] }],
       config: {
         systemInstruction: "You are a professional language tutor for Chinese learners. Analyze the English sentence. The output fields 'word', 'meaning', 'role', 'grammarNote', and 'context' MUST be in CHINESE. Keep the 'word' field as English word and 'phonetic' as standard IPA.",
@@ -175,10 +175,10 @@ export const analyzeSentence = async (sentence: string) => {
   });
 };
 
-export const disassembleText = async (rawText: string) => {
+export const disassembleText = async (rawText: string, model: string = 'gemini-3-pro-preview') => {
   return callWithRetry(async () => {
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
+      model: model,
       contents: [{ parts: [{ text: `Text to disassemble: "${rawText}"` }] }],
       config: {
         systemInstruction: "You are a meticulous language teacher. Disassemble English text into a learning deck. 1. The 'text' field MUST BE THE ORIGINAL ENGLISH SENTENCE. 2. The 'translation', 'grammarNote', and 'context' fields MUST BE IN CHINESE. 3. For 'breakdown', explain meanings and roles in CHINESE. 4. Suggest a repeatCount (3-5) based on complexity.",

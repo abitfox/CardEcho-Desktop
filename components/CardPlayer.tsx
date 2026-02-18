@@ -8,17 +8,26 @@ interface CardPlayerProps {
   cards: Card[];
   deckTitle: string;
   onActiveCardChange: (card: Card) => void;
-  onCardComplete?: (cardId: string) => void; // 新增回调
+  onCardComplete?: (cardId: string) => void;
   language: Language;
+  globalSpeed: number; // 接收全局语速
+  onSpeedChange: (speed: number) => void; // 用于同步全局设置
 }
 
 const STORAGE_KEY_AUTO_NEXT = 'cardecho_auto_next';
 
-const CardPlayer: React.FC<CardPlayerProps> = ({ cards, deckTitle, onActiveCardChange, onCardComplete, language }) => {
+const CardPlayer: React.FC<CardPlayerProps> = ({ 
+  cards, 
+  deckTitle, 
+  onActiveCardChange, 
+  onCardComplete, 
+  language,
+  globalSpeed,
+  onSpeedChange
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [currentRepeat, setCurrentRepeat] = useState(0);
   
   const [isAutoNext, setIsAutoNext] = useState(() => {
@@ -26,7 +35,7 @@ const CardPlayer: React.FC<CardPlayerProps> = ({ cards, deckTitle, onActiveCardC
   });
   
   const isAutoNextRef = useRef(isAutoNext);
-  const playbackSpeedRef = useRef(playbackSpeed);
+  const playbackSpeedRef = useRef(globalSpeed);
   const isLoopingRef = useRef(false);
 
   useEffect(() => {
@@ -34,9 +43,10 @@ const CardPlayer: React.FC<CardPlayerProps> = ({ cards, deckTitle, onActiveCardC
     localStorage.setItem(STORAGE_KEY_AUTO_NEXT, String(isAutoNext));
   }, [isAutoNext]);
 
+  // 同步全局语速到内部 Ref
   useEffect(() => {
-    playbackSpeedRef.current = playbackSpeed;
-  }, [playbackSpeed]);
+    playbackSpeedRef.current = globalSpeed;
+  }, [globalSpeed]);
 
   const handleScroll = () => {
     if (!containerRef.current) return;
@@ -88,7 +98,6 @@ const CardPlayer: React.FC<CardPlayerProps> = ({ cards, deckTitle, onActiveCardC
       }
       
       if (activeIdx === index) {
-        // 如果完整听完了复读，触发完成回调
         if (completedFullCycle) {
           onCardComplete?.(currentCard.id);
         }
@@ -119,7 +128,7 @@ const CardPlayer: React.FC<CardPlayerProps> = ({ cards, deckTitle, onActiveCardC
   };
 
   const changeSpeed = (speed: number) => {
-    setPlaybackSpeed(speed);
+    onSpeedChange(speed); // 更新全局状态
     playbackSpeedRef.current = speed;
     
     if (isPlaying) {
@@ -163,7 +172,7 @@ const CardPlayer: React.FC<CardPlayerProps> = ({ cards, deckTitle, onActiveCardC
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeIdx, isPlaying, playbackSpeed]);
+  }, [activeIdx, isPlaying, globalSpeed]);
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white relative">
@@ -229,8 +238,8 @@ const CardPlayer: React.FC<CardPlayerProps> = ({ cards, deckTitle, onActiveCardC
                 </div>
                 <div className="flex items-center gap-4">
                   {[0.75, 1.0, 1.25, 1.5].map(speed => (
-                    <button key={speed} onClick={() => changeSpeed(speed)} className={`p-3 transition-all rounded-lg flex flex-col items-center gap-1 ${playbackSpeed === speed ? 'text-blue-600' : 'text-gray-400 hover:text-blue-600'}`}>
-                        <span className={`text-xs font-bold px-2 py-1 rounded transition-colors ${playbackSpeed === speed ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'}`}>{speed.toFixed(2)}x</span>
+                    <button key={speed} onClick={() => changeSpeed(speed)} className={`p-3 transition-all rounded-lg flex flex-col items-center gap-1 ${globalSpeed === speed ? 'text-blue-600' : 'text-gray-400 hover:text-blue-600'}`}>
+                        <span className={`text-xs font-bold px-2 py-1 rounded transition-colors ${globalSpeed === speed ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'}`}>{speed.toFixed(2)}x</span>
                     </button>
                   ))}
                 </div>

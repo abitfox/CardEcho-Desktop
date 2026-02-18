@@ -46,7 +46,7 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
     const isDirty = JSON.stringify(deck) !== JSON.stringify(editedDeck);
     setHasChanges(isDirty);
     
-    // 自动重置保存状态的逻辑移至 handleManualSave 或由 prop 同步触发
+    // 自动重置保存状态
     if (!isDirty && saveStatus === 'saving') {
       setSaveStatus('saved');
       const timer = setTimeout(() => setSaveStatus('idle'), 3000);
@@ -108,7 +108,7 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
   };
 
   const deleteCard = (idx: number, e: React.MouseEvent) => {
-    e.stopPropagation();
+    e.stopPropagation(); // 阻止冒泡到外层 div 的点击事件
     if (editedDeck.cards.length <= 1) return;
     const newCards = editedDeck.cards.filter((_, i) => i !== idx);
     setEditedDeck({ ...editedDeck, cards: newCards });
@@ -156,7 +156,6 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
           const updatedDeck = { ...editedDeck, cards: newCards };
           setEditedDeck(updatedDeck);
           await onSave(updatedDeck);
-          // 保存成功后由 useEffect 处理或此处显式处理
         }
       } else {
         setSaveStatus('idle');
@@ -246,7 +245,6 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
     setSaveStatus('saving');
     try {
       await onSave(editedDeck);
-      // 显式设置保存成功状态，并强制清除 dirty 标记
       setSaveStatus('saved');
       setHasChanges(false);
       setTimeout(() => setSaveStatus('idle'), 3000);
@@ -294,23 +292,29 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
       {/* Sidebar Deck Structure */}
       <div className="w-80 border-r border-gray-100 flex flex-col bg-gray-50/30">
         <div className="p-6 border-b border-gray-100 bg-white">
-          <button 
+          <div 
+            role="button"
+            tabIndex={0}
             onClick={() => setActiveCardIdx(null)}
-            className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 ${activeCardIdx === null ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-100' : 'text-gray-600 hover:bg-gray-100'}`}
+            onKeyDown={(e) => e.key === 'Enter' && setActiveCardIdx(null)}
+            className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 cursor-pointer ${activeCardIdx === null ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-100' : 'text-gray-600 hover:bg-gray-100'}`}
           >
             <span className="text-xl">{editedDeck.icon}</span>
             <div className="overflow-hidden">
                <p className="text-sm font-bold truncate">{editedDeck.title || 'Untitled'}</p>
                <p className="text-[10px] text-gray-400 font-medium">Resource Settings</p>
             </div>
-          </button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {editedDeck.cards.map((card, idx) => (
-            <button
+            <div
               key={card.id}
+              role="button"
+              tabIndex={0}
               onClick={() => setActiveCardIdx(idx)}
-              className={`w-full text-left p-4 transition-all border-b border-gray-50 flex flex-col gap-1 group relative ${
+              onKeyDown={(e) => e.key === 'Enter' && setActiveCardIdx(idx)}
+              className={`w-full text-left p-4 transition-all border-b border-gray-50 flex flex-col gap-1 group relative cursor-pointer ${
                 activeCardIdx === idx ? 'bg-white shadow-sm border-l-4 border-l-blue-600' : 'hover:bg-gray-100'
               }`}
             >
@@ -327,12 +331,12 @@ const DeckEditor: React.FC<DeckEditorProps> = ({ deck, onSave, onCancel, onStart
                 </div>
                 <button 
                   onClick={(e) => deleteCard(idx, e)}
-                  className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-10"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
               </div>
-            </button>
+            </div>
           ))}
         </div>
         <div className="p-4 border-t border-gray-100 bg-white">

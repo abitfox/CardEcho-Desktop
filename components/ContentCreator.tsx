@@ -1,18 +1,19 @@
 
 import React, { useState } from 'react';
 import { disassembleText, generateEnglishMaterial } from '../services/geminiService';
-import { Deck, Card, Language } from '../types';
+import { Deck, Card, Language, AIModel } from '../types';
 import { t } from '../services/i18n';
 
 interface ContentCreatorProps {
   onSave: (deck: Deck) => void;
   onCancel: () => void;
   language: Language;
+  selectedModel: AIModel;
 }
 
 type CreatorStep = 'input' | 'materialPreview' | 'deckPreview';
 
-const ContentCreator: React.FC<ContentCreatorProps> = ({ onSave, onCancel, language }) => {
+const ContentCreator: React.FC<ContentCreatorProps> = ({ onSave, onCancel, language, selectedModel }) => {
   const [inputText, setInputText] = useState('');
   const [generatedMaterial, setGeneratedMaterial] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -26,7 +27,7 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({ onSave, onCancel, langu
     setIsProcessing(true);
 
     if (containsChinese(inputText)) {
-      const material = await generateEnglishMaterial(inputText);
+      const material = await generateEnglishMaterial(inputText, selectedModel);
       if (material) {
         setGeneratedMaterial(material);
         setStep('materialPreview');
@@ -39,7 +40,7 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({ onSave, onCancel, langu
 
   const performDisassembly = async (text: string) => {
     setIsProcessing(true);
-    const result = await disassembleText(text);
+    const result = await disassembleText(text, selectedModel);
     if (result) {
       const timestamp = Date.now();
       setPreviewDeck({
@@ -74,15 +75,23 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({ onSave, onCancel, langu
     <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
       <div className="max-w-4xl mx-auto px-8 py-16 w-full">
         {/* Header Section */}
-        <div className="mb-10">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {step === 'deckPreview' ? t(language, 'create.confirm') : t(language, 'create.title')}
-          </h1>
-          <p className="text-sm text-gray-400 font-medium">
-            {step === 'materialPreview' 
-              ? (language === 'zh' ? 'AI 已为您准备好英文素材，您可以预览或微调内容。' : 'AI has prepared the English material. Preview or refine it below.')
-              : t(language, 'create.desc')}
-          </p>
+        <div className="mb-10 flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              {step === 'deckPreview' ? t(language, 'create.confirm') : t(language, 'create.title')}
+            </h1>
+            <p className="text-sm text-gray-400 font-medium">
+              {step === 'materialPreview' 
+                ? (language === 'zh' ? 'AI 已为您准备好英文素材，您可以预览或微调内容。' : 'AI has prepared the English material. Preview or refine it below.')
+                : t(language, 'create.desc')}
+            </p>
+          </div>
+          
+          <div className="flex flex-col items-end gap-1 opacity-60">
+            <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg uppercase tracking-widest border border-blue-100">
+              {selectedModel.replace('-preview', '').replace('-', ' ').toUpperCase()} ENGINE ACTIVE
+            </span>
+          </div>
         </div>
 
         {step === 'input' && (
@@ -98,12 +107,14 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({ onSave, onCancel, langu
               
               {isProcessing && (
                 <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-2xl z-20 flex flex-col items-center justify-center space-y-6">
-                  <div className="w-12 h-12 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  <div className={`w-12 h-12 border-2 ${selectedModel === 'gemini-3-pro-preview' ? 'border-indigo-500' : 'border-blue-500'} border-t-transparent rounded-full animate-spin`}></div>
                   <div className="text-center">
-                    <p className="font-bold text-blue-600 text-sm tracking-widest uppercase">
+                    <p className={`font-bold ${selectedModel === 'gemini-3-pro-preview' ? 'text-indigo-600' : 'text-blue-600'} text-sm tracking-widest uppercase`}>
                       {containsChinese(inputText) ? (language === 'zh' ? '正在构思英文素材...' : 'CRAFTING MATERIAL...') : t(language, 'create.processing')}
                     </p>
-                    <p className="text-gray-400 text-[10px] mt-2 font-medium">Gemini 3 Pro Intelligence Engine</p>
+                    <p className="text-gray-400 text-[10px] mt-2 font-medium uppercase tracking-widest">
+                      {selectedModel.replace('-preview', '').replace('-', ' ')} ENGINE
+                    </p>
                   </div>
                 </div>
               )}
@@ -126,9 +137,9 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({ onSave, onCancel, langu
                 <button
                   onClick={handleInitialAction}
                   disabled={!inputText.trim() || isProcessing}
-                  className="px-8 py-3 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 disabled:opacity-50 flex items-center gap-2 active:scale-95"
+                  className={`px-8 py-3 ${selectedModel === 'gemini-3-pro-preview' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-100'} text-white rounded-xl text-xs font-bold transition-all shadow-lg disabled:opacity-50 flex items-center gap-2 active:scale-95`}
                 >
-                  <span className="text-sm">✨</span>
+                  <span className="text-sm">{selectedModel === 'gemini-3-pro-preview' ? '✨' : '⚡'}</span>
                   {t(language, 'create.generate')}
                 </button>
               </div>
@@ -148,10 +159,10 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({ onSave, onCancel, langu
               
               {isProcessing && (
                 <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-2xl z-20 flex flex-col items-center justify-center space-y-6">
-                  <div className="w-12 h-12 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  <div className={`w-12 h-12 border-2 ${selectedModel === 'gemini-3-pro-preview' ? 'border-indigo-500' : 'border-blue-500'} border-t-transparent rounded-full animate-spin`}></div>
                   <div className="text-center">
-                    <p className="font-bold text-blue-600 text-sm tracking-widest uppercase">{t(language, 'create.processing')}</p>
-                    <p className="text-gray-400 text-[10px] mt-2 font-medium">Deconstructing linguistic elements...</p>
+                    <p className={`font-bold ${selectedModel === 'gemini-3-pro-preview' ? 'text-indigo-600' : 'text-blue-600'} text-sm tracking-widest uppercase`}>{t(language, 'create.processing')}</p>
+                    <p className="text-gray-400 text-[10px] mt-2 font-medium uppercase tracking-widest">{selectedModel.replace('-preview', '').replace('-', ' ')} ENGINE</p>
                   </div>
                 </div>
               )}
@@ -175,7 +186,7 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({ onSave, onCancel, langu
                 <button
                   onClick={() => performDisassembly(generatedMaterial)}
                   disabled={!generatedMaterial.trim() || isProcessing}
-                  className="px-8 py-3 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 disabled:opacity-50 flex items-center gap-2 active:scale-95"
+                  className={`px-8 py-3 ${selectedModel === 'gemini-3-pro-preview' ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-100'} text-white rounded-xl text-xs font-bold transition-all shadow-lg disabled:opacity-50 flex items-center gap-2 active:scale-95`}
                 >
                   <span className="text-sm">✂️</span>
                   {language === 'zh' ? '确认素材并开始拆解' : 'Confirm & Start Disassemble'}
@@ -209,7 +220,7 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({ onSave, onCancel, langu
               <h3 className="text-[10px] font-black text-gray-300 uppercase tracking-widest ml-1">Card List Preview</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {previewDeck.cards?.map((card: any, i: number) => (
-                  <div key={card.id} className="p-6 bg-white border border-gray-50 rounded-2xl hover:border-blue-100 transition-all flex flex-col">
+                  <div key={card.id} className="p-6 bg-white border border-gray-100 rounded-2xl hover:border-blue-100 transition-all flex flex-col">
                     <div className="flex justify-between items-start mb-2">
                       <p className="text-sm font-bold text-gray-800 leading-snug">{card.text}</p>
                       <span className="text-[9px] font-bold text-gray-200">#{i + 1}</span>

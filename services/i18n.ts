@@ -41,7 +41,12 @@ const translations = {
       languageDesc: 'Select your preferred interface language.',
       cloudSync: 'Cloud Synchronization',
       cloudSyncDesc: 'Keep your progress synced across all desktop clients.',
-      hardwareAcc: 'Hardware Acceleration'
+      hardwareAcc: 'Hardware Acceleration',
+      modelSelect: 'AI Brain Engine',
+      modelFlashDesc: 'Flash: Lightning fast for simple daily phrases.',
+      modelProDesc: 'Pro: Deep analysis for complex literature & logic.',
+      playbackSpeed: 'Playback Speed',
+      playbackSpeedDesc: 'Default speed for card audio in Focus Mode.'
     },
     library: {
       title: 'My Learning Library',
@@ -65,7 +70,8 @@ const translations = {
       subscribeFree: 'Subscribe Free',
       deleteFromStore: 'Delete from Store',
       deleteConfirmTitle: 'Delete Marketplace Listing',
-      deleteConfirmMsg: 'You are about to delete this resource from the marketplace. Users will no longer be able to discover or subscribe to it. This action is irreversible.'
+      deleteConfirmMsg: 'You are about to delete this resource from the marketplace. Users will no longer be able to discover or subscribe to it. This action is irreversible.',
+      refresh: 'Refresh Store'
     },
     create: {
       title: 'Create New Deck',
@@ -142,7 +148,7 @@ const translations = {
     },
     settings: {
       title: '账号设置',
-      desc: '管理您的个人资料和账号偏好。',
+      desc: '管理您的个人资料 and 账号偏好。',
       personalInfo: '个人信息',
       displayName: '显示名称',
       email: '电子邮箱',
@@ -154,7 +160,12 @@ const translations = {
       languageDesc: '选择您偏好的界面显示语言。',
       cloudSync: '云端同步',
       cloudSyncDesc: '在所有桌面客户端之间同步您的学习进度。',
-      hardwareAcc: '硬件加速'
+      hardwareAcc: '硬件加速',
+      modelSelect: 'AI 引擎偏好',
+      modelFlashDesc: 'Flash: 闪电般极速，适合简单日常句型。',
+      modelProDesc: 'Pro: 深度思维，适合复杂文学或逻辑解析。',
+      playbackSpeed: '朗读语速',
+      playbackSpeedDesc: '设置学习模式中卡片语音的默认播放速度。'
     },
     library: {
       title: '我的学习资源库',
@@ -178,7 +189,8 @@ const translations = {
       subscribeFree: '免费订阅',
       deleteFromStore: '从商城下架',
       deleteConfirmTitle: '从商城下架资源',
-      deleteConfirmMsg: '您正在执行管理员操作。此资源将从商城中永久移除，用户将无法再搜索或订阅该内容。此操作不可恢复。'
+      deleteConfirmMsg: '您正在执行管理员操作。此资源将从商城中永久移除，用户将无法再搜索或订阅该内容。此操作不可恢复。',
+      refresh: '刷新商城'
     },
     create: {
       title: '创建新资源包',

@@ -1,14 +1,20 @@
 
 import React from 'react';
-import { Language } from '../types';
+import { Language, AIModel } from '../types';
 import { t } from '../services/i18n';
 
 interface SettingsProps {
   language: Language;
   onLanguageChange: (lang: Language) => void;
+  model: AIModel;
+  onModelChange: (model: AIModel) => void;
+  speed: number;
+  onSpeedChange: (speed: number) => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ language, onLanguageChange }) => {
+const Settings: React.FC<SettingsProps> = ({ language, onLanguageChange, model, onModelChange, speed, onSpeedChange }) => {
+  const speedOptions = [0.5, 0.75, 1.0, 1.25, 1.5];
+
   return (
     <div className="max-w-6xl mx-auto p-10 md:p-12 h-full overflow-y-auto custom-scrollbar">
       <div className="mb-10">
@@ -52,6 +58,49 @@ const Settings: React.FC<SettingsProps> = ({ language, onLanguageChange }) => {
                  >
                    English
                  </button>
+              </div>
+            </div>
+
+            {/* AI Model Setting Item */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 bg-slate-50/50 rounded-2xl border border-gray-50 gap-6 transition-all hover:bg-white hover:border-blue-100">
+              <div className="max-w-sm">
+                <p className="font-bold text-gray-800 text-sm mb-0.5">{t(language, 'settings.modelSelect')}</p>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  {model === 'gemini-3-flash-preview' ? t(language, 'settings.modelFlashDesc') : t(language, 'settings.modelProDesc')}
+                </p>
+              </div>
+              <div className="flex bg-gray-100/80 p-1 rounded-xl border border-gray-100 w-fit">
+                 <button 
+                  onClick={() => onModelChange('gemini-3-flash-preview')}
+                  className={`px-5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${model === 'gemini-3-flash-preview' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                 >
+                   <span className="text-sm">⚡</span> FLASH
+                 </button>
+                 <button 
+                  onClick={() => onModelChange('gemini-3-pro-preview')}
+                  className={`px-5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${model === 'gemini-3-pro-preview' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                 >
+                   <span className="text-sm">✨</span> PRO
+                 </button>
+              </div>
+            </div>
+
+            {/* Playback Speed Setting Item */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-6 bg-slate-50/50 rounded-2xl border border-gray-50 gap-6 transition-all hover:bg-white hover:border-blue-100">
+              <div className="max-w-sm">
+                <p className="font-bold text-gray-800 text-sm mb-0.5">{t(language, 'settings.playbackSpeed')}</p>
+                <p className="text-xs text-gray-400 leading-relaxed">{t(language, 'settings.playbackSpeedDesc')}</p>
+              </div>
+              <div className="flex bg-gray-100/80 p-1 rounded-xl border border-gray-100 w-fit">
+                 {speedOptions.map(opt => (
+                   <button 
+                    key={opt}
+                    onClick={() => onSpeedChange(opt)}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${speed === opt ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                   >
+                     {opt.toFixed(2)}x
+                   </button>
+                 ))}
               </div>
             </div>
 
