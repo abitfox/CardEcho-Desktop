@@ -165,10 +165,15 @@ const DeckEditor: React.FC<DeckEditorProps> = ({
     setHasChanges(isDirty);
     if (!isDirty && saveStatus === 'saving') {
       setSaveStatus('saved');
+    }
+  }, [editedDeck, deck]);
+
+  useEffect(() => {
+    if (saveStatus === 'saved') {
       const timer = setTimeout(() => setSaveStatus('idle'), 3000);
       return () => clearTimeout(timer);
     }
-  }, [editedDeck, deck]);
+  }, [saveStatus]);
 
   useEffect(() => {
     stopAllAudio();
@@ -253,18 +258,29 @@ const DeckEditor: React.FC<DeckEditorProps> = ({
     try {
       const audioResult = await generateAudio(activeCard.text, selectedVoice, voiceProvider, ttsSpeed);
       if (audioResult) {
-        const publicUrl = await cloudService.uploadAudio(activeCard.id, audioResult.url);
-        if (publicUrl) {
+        // 如果是豆包，直接使用返回的文件名，不再上传到 Supabase
+        let finalAudioUrl = audioResult.url;
+        if (voiceProvider !== 'doubao') {
+          const uploadedUrl = await cloudService.uploadAudio(activeCard.id, audioResult.url);
+          if (uploadedUrl) finalAudioUrl = uploadedUrl;
+          else {
+            setSaveStatus('idle');
+            return;
+          }
+        }
+
+        if (finalAudioUrl) {
           const newCards = [...editedDeck.cards];
           newCards[activeCardIdx!] = { 
             ...newCards[activeCardIdx!], 
-            audioUrl: publicUrl,
+            audioUrl: finalAudioUrl,
             voiceName: selectedVoice,
             audioDuration: audioResult.duration
           };
           const updatedDeck = { ...editedDeck, cards: newCards };
           setEditedDeck(updatedDeck);
           await onSave(updatedDeck);
+          setSaveStatus('saved');
           
           // 显示成功提示
           setShowSuccessHint(true);
@@ -273,10 +289,13 @@ const DeckEditor: React.FC<DeckEditorProps> = ({
           // 生成完成后自动播放一次
           setIsPlayingAudio(true);
           try {
-            await playAudio(publicUrl);
+            // 播放时需要处理文件名拼接，playAudio 内部已处理
+            await playAudio(finalAudioUrl);
           } finally {
             setIsPlayingAudio(false);
           }
+        } else {
+          setSaveStatus('idle');
         }
       } else {
         setSaveStatus('idle');
@@ -302,11 +321,17 @@ const DeckEditor: React.FC<DeckEditorProps> = ({
         if (!card.text.trim()) continue;
         const audioResult = await generateAudio(card.text, selectedVoice, voiceProvider, ttsSpeed);
         if (audioResult) {
-          const publicUrl = await cloudService.uploadAudio(card.id, audioResult.url);
-          if (publicUrl) {
+          // 如果是豆包，直接使用返回的文件名，不再上传到 Supabase
+          let finalAudioUrl = audioResult.url;
+          if (voiceProvider !== 'doubao') {
+            const uploadedUrl = await cloudService.uploadAudio(card.id, audioResult.url);
+            if (uploadedUrl) finalAudioUrl = uploadedUrl;
+          }
+
+          if (finalAudioUrl) {
             newCards[i] = { 
               ...newCards[i], 
-              audioUrl: publicUrl,
+              audioUrl: finalAudioUrl,
               voiceName: selectedVoice,
               audioDuration: audioResult.duration
             };
@@ -438,16 +463,29 @@ const DeckEditor: React.FC<DeckEditorProps> = ({
             <div
               key={card.id}
               onClick={() => setActiveCardIdx(idx)}
-              className={`w-full text-left p-4 transition-all border-b border-gray-50 flex flex-col gap-1 group relative cursor-pointer ${activeCardIdx === idx ? 'bg-white shadow-sm border-l-4 border-l-blue-600' : 'hover:bg-gray-100'}`}
+              className={`w-full text-left p-4 transition-all border-b border-gray-50 flex gap-3 group relative cursor-pointer ${activeCardIdx === idx ? 'bg-white shadow-sm border-l-4 border-l-blue-600' : 'hover:bg-gray-100'}`}
             >
-              <div className="flex items-center gap-2">
-                <p className={`text-sm font-semibold truncate flex-1 ${activeCardIdx === idx ? 'text-blue-600' : 'text-gray-800'}`}>
-                  <span className="text-[10px] text-gray-300 mr-1.5 tabular-nums">#{idx + 1}</span>
-                  {card.text || '(Empty Card)'}
-                </p>
-                <button onClick={(e) => deleteCard(idx, e)} className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
+              <div className="text-[10px] text-gray-300 tabular-nums pt-1 min-w-[24px]">#{idx + 1}</div>
+              <div className="flex-1 overflow-hidden flex flex-col gap-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className={`text-sm font-semibold truncate flex-1 ${activeCardIdx === idx ? 'text-blue-600' : 'text-gray-800'}`}>
+                    {card.text || '(Empty Card)'}
+                  </p>
+                  <button onClick={(e) => deleteCard(idx, e)} className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+                {card.audioUrl && card.audioUrl !== '#' && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-[9px] font-bold text-blue-500 rounded border border-blue-100 shrink-0">
+                      <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                      {([...Object.values(ALL_DOUBAO_VOICES).flat(), ...GEMINI_VOICES]).find(v => v.id === card.voiceName)?.label || card.voiceName || 'AI Voice'}
+                    </div>
+                    <span className="text-[9px] text-gray-400 truncate font-medium">
+                      {([...Object.values(ALL_DOUBAO_VOICES).flat(), ...GEMINI_VOICES]).find(v => v.id === card.voiceName)?.desc.split('|')[0] || ''}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           ))}

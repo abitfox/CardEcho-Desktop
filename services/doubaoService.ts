@@ -107,24 +107,12 @@ export const generateAudio = async (
       // 优先使用接口返回的时长，否则进行估算 (基于返回的 size 字节数，24000Hz MP3 约 8KB/s)
       const duration = result.data?.duration || (result.data?.size || blob.size) / 8000;
 
-      // 7. Base64 转换日志
-      return new Promise((resolve, reject) => {
-        debugService.log(`[Doubao Step 6] Converting Blob to Data URL...`, 'info');
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64Preview = (reader.result as string).substring(0, 50) + "...";
-          debugService.log(`[Doubao Step 7] Data URL conversion success`, 'ai', { base64Preview });
-          resolve({
-            url: reader.result as string,
-            duration: duration > 0 ? duration : 2.5
-          });
-        };
-        reader.onerror = (e) => {
-          debugService.log(`[Doubao Error] FileReader conversion failed`, 'error', e);
-          reject(e);
-        };
-        reader.readAsDataURL(blob);
-      });
+      // 7. 返回文件名和时长，不再转换为 Base64，由播放端拼接地址
+      debugService.log(`[Doubao Step 6] Returning filename for storage`, 'info', { fileName: result.fileName });
+      return {
+        url: result.fileName, // 仅存文件名
+        duration: duration > 0 ? duration : 2.5
+      };
 
     } else {
       debugService.log(`[Doubao Error] Success is false or missing downloadUrl`, 'error', result);

@@ -88,8 +88,14 @@ export const playAudio = async (url: string, playbackRate: number = 1.0) => {
   if (!url || url === '#') return;
   stopAllAudio();
 
-  if (url.startsWith('http') || url.startsWith('data:audio/')) {
-    activeAudioElement = new Audio(url);
+  let finalUrl = url;
+  // 如果不是完整地址且不是 DataURL，则视为豆包生成的文件名，拼接完整地址
+  if (!url.startsWith('http') && !url.startsWith('data:') && !url.includes(',')) {
+    finalUrl = `https://app.cardecho.cn/audio/${url}`;
+  }
+
+  if (finalUrl.startsWith('http') || finalUrl.startsWith('data:audio/')) {
+    activeAudioElement = new Audio(finalUrl);
     activeAudioElement.playbackRate = playbackRate;
     await activeAudioElement.play();
     return new Promise((resolve) => {
