@@ -42,11 +42,20 @@ const translations = {
       cloudSync: 'Cloud Synchronization',
       cloudSyncDesc: 'Keep your progress synced across all desktop clients.',
       hardwareAcc: 'Hardware Acceleration',
+      aiProvider: 'AI Service Provider',
+      aiProviderDesc: 'Select the AI engine that powers your learning analysis.',
+      voiceProvider: 'TTS Service Provider',
+      voiceProviderDesc: 'Select the text-to-speech engine for card audio.',
       modelSelect: 'AI Brain Engine',
       modelFlashDesc: 'Flash: Lightning fast for simple daily phrases.',
       modelProDesc: 'Pro: Deep analysis for complex literature & logic.',
+      modelDsChatDesc: 'DeepSeek Chat: Balanced performance for daily learning.',
+      modelDsReasonDesc: 'DeepSeek R1: Advanced reasoning for linguistic logic.',
       playbackSpeed: 'Playback Speed',
-      playbackSpeedDesc: 'Default speed for card audio in Focus Mode.'
+      playbackSpeedDesc: 'Default speed for card audio in Focus Mode.',
+      devOptions: 'Developer Options',
+      showDebug: 'Show Debug Window',
+      showDebugDesc: 'Display a floating console for real-time AI & system logs.'
     },
     library: {
       title: 'My Learning Library',
@@ -161,11 +170,20 @@ const translations = {
       cloudSync: '云端同步',
       cloudSyncDesc: '在所有桌面客户端之间同步您的学习进度。',
       hardwareAcc: '硬件加速',
+      aiProvider: 'AI 服务商切换',
+      aiProviderDesc: '选择驱动学习分析的 AI 引擎平台。',
+      voiceProvider: 'TTS 语音合成平台',
+      voiceProviderDesc: '选择生成卡片音频的语音合成引擎。',
       modelSelect: 'AI 引擎偏好',
       modelFlashDesc: 'Flash: 闪电般极速，适合简单日常句型。',
       modelProDesc: 'Pro: 深度思维，适合复杂文学或逻辑解析。',
+      modelDsChatDesc: 'DeepSeek Chat: 均衡的日常语言处理能力。',
+      modelDsReasonDesc: 'DeepSeek R1: 顶尖推理能力，适合解析复杂长难句。',
       playbackSpeed: '朗读语速',
-      playbackSpeedDesc: '设置学习模式中卡片语音的默认播放速度。'
+      playbackSpeedDesc: '设置学习模式中卡片语音的默认播放速度。',
+      devOptions: '开发者选项',
+      showDebug: '显示调试窗口',
+      showDebugDesc: '在屏幕上显示一个悬浮窗，用于实时查看 AI 接口及系统运行日志。'
     },
     library: {
       title: '我的学习资源库',
@@ -178,6 +196,7 @@ const translations = {
       deleteConfirmTitle: '删除学习包',
       deleteConfirmMsg: '您确定要永久删除这个学习包吗？此操作不可撤销，所有卡片及进度都将丢失。',
       deleteAction: '确认删除',
+      deleteConfirmAction: '确认删除',
       deleteCancel: '取消'
     },
     store: {

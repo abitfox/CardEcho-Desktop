@@ -11,9 +11,11 @@ import Settings from './components/Settings';
 import Profile from './components/Profile';
 import { Statistics } from './components/Statistics';
 import { StudyProgressModal } from './components/StudyProgressModal'; 
-import { AppSection, Card, Deck, User, Language, AIModel } from './types';
+import { DebugWindow } from './components/DebugWindow';
+import { AppSection, Card, Deck, User, Language, AIModel, AIProvider, VoiceProvider } from './types';
 import { MOCK_STORE_DECKS } from './constants';
 import { cloudService } from './services/cloudService';
+import { debugService } from './services/debugService';
 import { t } from './services/i18n';
 
 const LAST_DECK_KEY = 'cardecho_last_deck_id';
@@ -23,8 +25,20 @@ const App: React.FC = () => {
   const [currentSection, setCurrentSection] = useState<AppSection>(AppSection.LIBRARY);
   const [libraryTab, setLibraryTab] = useState<'created' | 'subscribed'>('created');
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('cardecho_lang') as Language) || 'zh');
-  const [selectedModel, setSelectedModel] = useState<AIModel>(() => (localStorage.getItem('cardecho_model') as AIModel) || 'gemini-3-flash-preview');
+  
+  const [aiProvider, setAiProvider] = useState<AIProvider>(() => (localStorage.getItem('cardecho_provider') as AIProvider) || 'google');
+  // 修改此处：默认语音提供商改为 'doubao'
+  const [voiceProvider, setVoiceProvider] = useState<VoiceProvider>(() => (localStorage.getItem('cardecho_voice_provider') as VoiceProvider) || 'doubao');
+  
+  const [selectedModel, setSelectedModel] = useState<AIModel>(() => {
+    const saved = localStorage.getItem('cardecho_model');
+    if (saved) return saved as AIModel;
+    return (localStorage.getItem('cardecho_provider') === 'deepseek' ? 'deepseek-chat' : 'gemini-3-flash-preview') as AIModel;
+  });
+
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(() => Number(localStorage.getItem('cardecho_speed')) || 1.0);
+  const [showDebug, setShowDebug] = useState<boolean>(() => localStorage.getItem('cardecho_debug') === 'true');
+
   const [decks, setDecks] = useState<Deck[]>([]);
   const [storeDecks, setStoreDecks] = useState<Deck[]>([]);
   const [activeDeck, setActiveDeck] = useState<Deck | null>(null);
@@ -43,6 +57,7 @@ const App: React.FC = () => {
 
   const loadUserData = async (user: User) => {
     try {
+      debugService.log(`Loading cloud data for user: ${user.email}`, 'info');
       const [userDecks, stats] = await Promise.all([
         cloudService.fetchUserDecks(user.id),
         cloudService.getStudyStats(user.id)
@@ -55,8 +70,9 @@ const App: React.FC = () => {
       const lastDeckId = localStorage.getItem(LAST_DECK_KEY);
       const selected = (lastDeckId && userDecks.find(d => d.id === lastDeckId)) || userDecks[0];
       if (selected) setActiveDeck(selected);
+      debugService.log(`Loaded ${userDecks.length} decks from cloud`, 'info');
     } catch (err) {
-      console.error("Failed to sync cloud user data:", err);
+      debugService.log(`Failed to sync cloud data: ${err}`, 'error');
     }
   };
 
@@ -80,8 +96,9 @@ const App: React.FC = () => {
       if (!studiedCardIds.has(cardId)) {
         setAllTimeCount(prev => prev + 1);
       }
+      debugService.log(`Card completed: ${cardId}`, 'info');
     } catch (err) {
-      console.error("Failed to log card completion:", err);
+      debugService.log(`Failed to log card completion: ${err}`, 'error');
     }
   };
 
@@ -89,18 +106,22 @@ const App: React.FC = () => {
     try {
       let cloudStoreDecks = await cloudService.fetchStoreDecks();
       if (cloudStoreDecks.length === 0) {
+        debugService.log("Store empty, seeding mock data...", 'warn');
         await cloudService.seedStoreData(MOCK_STORE_DECKS);
         cloudStoreDecks = await cloudService.fetchStoreDecks();
       }
       setStoreDecks(cloudStoreDecks);
+      debugService.log(`Store sync complete: ${cloudStoreDecks.length} items available`, 'info');
     } catch (err) {
       setStoreDecks(MOCK_STORE_DECKS);
+      debugService.log(`Store sync failed, falling back to local mocks: ${err}`, 'error');
     }
   };
 
   useEffect(() => {
     const initApp = async () => {
       try {
+        debugService.log("Initializing CardEcho Desktop Application...", 'info');
         await loadStoreData();
         const savedUserEmail = localStorage.getItem('cardecho_user_email');
         if (savedUserEmail) {
@@ -117,6 +138,7 @@ const App: React.FC = () => {
   const handleSetActiveDeck = (deck: Deck) => {
     setActiveDeck(deck);
     localStorage.setItem(LAST_DECK_KEY, deck.id);
+    debugService.log(`Switched to deck: ${deck.title}`, 'info');
   };
 
   const handleLanguageChange = (newLang: Language) => {
@@ -124,14 +146,76 @@ const App: React.FC = () => {
     localStorage.setItem('cardecho_lang', newLang);
   };
 
+  const handleProviderChange = (provider: AIProvider) => {
+    setAiProvider(provider);
+    localStorage.setItem('cardecho_provider', provider);
+    const defaultModel = provider === 'google' ? 'gemini-3-flash-preview' : 'deepseek-chat';
+    handleModelChange(defaultModel as AIModel);
+    debugService.log(`Switched AI provider to: ${provider}`, 'warn');
+  };
+
+  const handleVoiceProviderChange = (provider: VoiceProvider) => {
+    setVoiceProvider(provider);
+    localStorage.setItem('cardecho_voice_provider', provider);
+    debugService.log(`Switched Voice provider to: ${provider}`, 'warn');
+  };
+
   const handleModelChange = (model: AIModel) => {
     setSelectedModel(model);
     localStorage.setItem('cardecho_model', model);
+    debugService.log(`Switched AI brain to: ${model}`, 'info');
   };
 
   const handleSpeedChange = (speed: number) => {
     setPlaybackSpeed(speed);
     localStorage.setItem('cardecho_speed', String(speed));
+  };
+
+  const handleToggleDebug = (show: boolean) => {
+    setShowDebug(show);
+    localStorage.setItem('cardecho_debug', String(show));
+    debugService.log(`Debug window visibility toggled: ${show}`, 'info');
+  };
+
+  const handleToggleReview = async (cardId: string, isForReview: boolean) => {
+    if (!currentUser) return;
+    try {
+      await cloudService.toggleReviewCard(cardId, isForReview);
+      setDecks(prev => prev.map(deck => ({
+        ...deck,
+        cards: deck.cards.map(card => card.id === cardId ? { ...card, isForReview } : card)
+      })));
+      if (activeCard && activeCard.id === cardId) {
+        setActiveCard(prev => prev ? { ...prev, isForReview } : null);
+      }
+      if (activeDeck?.id === 'virtual-review-deck') {
+        setActiveDeck(prev => prev ? {
+          ...prev,
+          cards: prev.cards.map(card => card.id === cardId ? { ...card, isForReview } : card)
+        } : null);
+      }
+      debugService.log(`Card review status updated: ${cardId} -> ${isForReview}`, 'info');
+    } catch (err) {
+      debugService.log(`Toggle review state failed: ${err}`, 'error');
+    }
+  };
+
+  const getReviewCards = () => decks.flatMap(d => d.cards).filter(c => c.isForReview);
+
+  const startReviewSession = () => {
+    const reviewCards = getReviewCards();
+    if (reviewCards.length === 0) return;
+    const virtualReviewDeck: Deck = {
+      id: 'virtual-review-deck',
+      title: language === 'zh' ? '我的复习清单' : 'My Review List',
+      description: language === 'zh' ? '针对所有标记为 ❤️ 的卡片进行强化复习' : 'Intensive review for all cards marked with ❤️',
+      icon: '❤️',
+      cards: reviewCards,
+      createdAt: Date.now()
+    };
+    setActiveDeck(virtualReviewDeck);
+    setCurrentSection(AppSection.LEARNING);
+    debugService.log("Starting intensive review session with marked cards", 'ai');
   };
 
   const handleLogout = () => {
@@ -144,11 +228,13 @@ const App: React.FC = () => {
     setStreak(0);
     setAllTimeCount(0);
     setCurrentSection(AppSection.LIBRARY);
+    debugService.log("User logged out, local cache cleared", 'warn');
   };
 
   const handleLoginSuccess = async (user: User) => {
     localStorage.setItem('cardecho_user_email', user.email);
     setCurrentUser(user);
+    debugService.log(`Authentication successful: ${user.name}`, 'info');
   };
 
   if (isLoading) {
@@ -163,48 +249,36 @@ const App: React.FC = () => {
             <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-bl from-white/20 to-transparent pointer-events-none"></div>
           </div>
         </div>
-
         <div className="flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
           <h1 className="text-4xl font-black text-gray-900 tracking-tight leading-none">CardEcho</h1>
           <p className="text-[10px] font-black text-blue-600/60 uppercase tracking-[0.4em] mt-3 mb-10">Linguistics AI</p>
-          
           <div className="flex flex-col items-center gap-2">
             <div className="w-48 h-1 bg-gray-200 rounded-full overflow-hidden">
               <div className="h-full bg-blue-600 w-1/3 rounded-full animate-[loading_2s_infinite_ease-in-out]"></div>
             </div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2 animate-pulse">
-              Initialising Echo Cloud...
-            </p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2 animate-pulse">Initialising Echo Cloud...</p>
           </div>
         </div>
-
-        <style>{`
-          @keyframes loading {
-            0% { transform: translateX(-100%); width: 30%; }
-            50% { transform: translateX(100%); width: 60%; }
-            100% { transform: translateX(300%); width: 30%; }
-          }
-        `}</style>
+        <style>{`@keyframes loading {0% { transform: translateX(-100%); width: 30%; }50% { transform: translateX(100%); width: 60%; }100% { transform: translateX(300%); width: 30%; }}`}</style>
       </div>
     );
   }
 
   if (!currentUser) return <Auth onLogin={handleLoginSuccess} />;
 
+  const hasReviewCards = getReviewCards().length > 0;
+
   return (
     <div className="flex h-screen bg-white">
+      {showDebug && <DebugWindow />}
+      
       <Sidebar 
-        currentSection={currentSection} 
-        onSectionChange={setCurrentSection} 
-        user={currentUser} 
-        onLogout={handleLogout} 
-        language={language} 
-        hasDecks={decks.length > 0} 
-        studiedCount={studiedCardIds.size} 
-        dailyGoal={dailyGoal}
+        currentSection={currentSection} onSectionChange={setCurrentSection} 
+        user={currentUser} onLogout={handleLogout} 
+        language={language} hasDecks={decks.length > 0} 
+        studiedCount={studiedCardIds.size} dailyGoal={dailyGoal}
         onProgressClick={() => setIsProgressModalOpen(true)}
       />
-      
       <main className="flex-1 flex flex-col overflow-hidden relative">
         {currentSection === AppSection.LIBRARY && (
           <div className="flex-1 overflow-y-auto p-12 custom-scrollbar">
@@ -217,23 +291,25 @@ const App: React.FC = () => {
                     <button onClick={() => setLibraryTab('subscribed')} className={`text-sm font-bold pb-2 border-b-2 transition-all ${libraryTab === 'subscribed' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>{t(language, 'library.tabSubscribed')}</button>
                   </div>
                 </div>
-                <button onClick={() => setCurrentSection(AppSection.CREATE)} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 flex items-center gap-2"><span className="text-xl">✨</span> {t(language, 'sidebar.create')}</button>
+                <div className="flex items-center gap-4">
+                  {hasReviewCards && (
+                    <button onClick={startReviewSession} className="flex items-center gap-2 px-6 py-4 bg-gradient-to-r from-rose-500 to-pink-600 text-white rounded-2xl font-bold hover:shadow-xl hover:scale-105 transition-all shadow-lg active:scale-95 animate-in fade-in slide-in-from-right-2 duration-300">
+                      <span>❤️</span>{language === 'zh' ? '开始复习' : 'REVIEW'}
+                    </button>
+                  )}
+                  <button onClick={() => setCurrentSection(AppSection.CREATE)} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 flex items-center gap-2"><span className="text-xl">✨</span> {t(language, 'sidebar.create')}</button>
+                </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {decks.filter(d => libraryTab === 'created' ? !d.isSubscribed : d.isSubscribed).map((deck) => {
-                  // 判断是否已发布到商城
                   const isPublishedToStore = storeDecks.some(sd => sd.originDeckId === deck.id);
-
                   return (
                     <div key={deck.id} className="group bg-white border border-gray-100 rounded-[32px] p-8 hover:shadow-2xl hover:border-blue-200 transition-all flex flex-col relative overflow-hidden">
-                      {/* 已发布状态标签 (右上角) */}
                       {libraryTab === 'created' && isPublishedToStore && (
                         <div className="absolute top-4 right-4 bg-indigo-50/80 backdrop-blur-sm text-indigo-600 px-3 py-1.5 rounded-full text-[10px] font-black flex items-center gap-1.5 border border-indigo-100 shadow-sm z-10">
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>
                           {language === 'zh' ? '已上架商城' : 'ON MARKET'}
                         </div>
                       )}
-
                       <div className="text-5xl mb-6 group-hover:scale-110 transition-transform origin-left">{deck.icon}</div>
                       <h3 className="text-xl font-bold text-gray-900 mb-2">{deck.title}</h3>
                       <p className="text-gray-500 text-sm mb-8 flex-grow line-clamp-2">{deck.description}</p>
@@ -255,65 +331,44 @@ const App: React.FC = () => {
         {currentSection === AppSection.LEARNING && activeDeck && (
           <div className="flex-1 flex overflow-hidden">
             <CardPlayer cards={activeDeck.cards} deckTitle={activeDeck.title} onActiveCardChange={setActiveCard} onCardComplete={handleCardComplete} language={language} globalSpeed={playbackSpeed} onSpeedChange={handleSpeedChange} />
-            <AnalysisPanel card={activeCard} language={language} />
+            <AnalysisPanel card={activeCard} language={language} onToggleReview={handleToggleReview} />
           </div>
         )}
-        {currentSection === AppSection.CREATE && <ContentCreator onSave={(d) => cloudService.saveDeck(d, currentUser.id).then(() => cloudService.fetchUserDecks(currentUser.id).then(setDecks)).then(() => setCurrentSection(AppSection.LIBRARY))} onCancel={() => setCurrentSection(AppSection.LIBRARY)} language={language} selectedModel={selectedModel} />}
+        {currentSection === AppSection.CREATE && <ContentCreator onSave={(d) => cloudService.saveDeck(d, currentUser.id).then(() => cloudService.fetchUserDecks(currentUser.id).then(setDecks)).then(() => setCurrentSection(AppSection.LIBRARY))} onCancel={() => setCurrentSection(AppSection.LIBRARY)} language={language} provider={aiProvider} selectedModel={selectedModel} />}
         {currentSection === AppSection.STORE && (
           <Store 
             featuredDecks={storeDecks} 
             onSubscribe={(d) => cloudService.saveDeck({ ...d, id: crypto.randomUUID(), isSubscribed: true, createdAt: Date.now() }, currentUser.id).then(() => cloudService.fetchUserDecks(currentUser.id).then(setDecks)).then(() => setCurrentSection(AppSection.LEARNING))} 
             subscribedTitles={decks.map(d => d.title)} 
-            language={language} 
-            userId={currentUser.id} 
-            userRole={currentUser.role} 
-            onUpdateStoreMetadata={cloudService.updateStoreDeckMetadata} 
-            onDeleteStoreDeck={cloudService.deleteStoreDeck}
-            onRefresh={loadStoreData}
+            language={language} userId={currentUser.id} userRole={currentUser.role} 
+            onUpdateStoreMetadata={cloudService.updateStoreDeckMetadata} onDeleteStoreDeck={cloudService.deleteStoreDeck} onRefresh={loadStoreData}
           />
         )}
         {currentSection === AppSection.STATISTICS && <Statistics studiedCardIds={studiedCardIds} allTimeCount={allTimeCount} dailyGoal={dailyGoal} streak={streak} language={language} />}
-        {currentSection === AppSection.SETTINGS && <Settings language={language} onLanguageChange={handleLanguageChange} model={selectedModel} onModelChange={handleModelChange} speed={playbackSpeed} onSpeedChange={handleSpeedChange} />}
+        {currentSection === AppSection.SETTINGS && (
+          <Settings 
+            language={language} onLanguageChange={handleLanguageChange} 
+            provider={aiProvider} onProviderChange={handleProviderChange} 
+            voiceProvider={voiceProvider} onVoiceProviderChange={handleVoiceProviderChange}
+            model={selectedModel} onModelChange={handleModelChange} 
+            speed={playbackSpeed} onSpeedChange={handleSpeedChange} 
+            showDebug={showDebug} onToggleDebug={handleToggleDebug}
+          />
+        )}
         {currentSection === AppSection.PROFILE && <Profile user={currentUser} onUpdateUser={setCurrentUser} language={language} />}
         {currentSection === AppSection.EDIT && editingDeck && (
           <DeckEditor 
-            deck={editingDeck} 
-            language={language} 
+            deck={editingDeck} language={language} provider={aiProvider} model={selectedModel}
+            voiceProvider={voiceProvider}
             onCancel={() => {setEditingDeck(null); setCurrentSection(AppSection.LIBRARY);}} 
-            onSave={async (d) => { 
-              await cloudService.saveDeck(d, currentUser.id); 
-              const updated = await cloudService.fetchUserDecks(currentUser.id); 
-              setDecks(updated); 
-              // 关键修复：同步更新当前正在编辑的卡片包状态，确保编辑器知道已保存
-              const freshDeck = updated.find(item => item.id === d.id);
-              if (freshDeck) setEditingDeck(freshDeck);
-            }}
+            onSave={async (d) => { await cloudService.saveDeck(d, currentUser.id); const updated = await cloudService.fetchUserDecks(currentUser.id); setDecks(updated); const freshDeck = updated.find(item => item.id === d.id); if (freshDeck) setEditingDeck(freshDeck); }}
             onStartLearning={(d) => { handleSetActiveDeck(d); setCurrentSection(AppSection.LEARNING); }}
-            onPublish={async (d) => { 
-              setIsPublishing(d.id);
-              try {
-                await cloudService.publishToStore(d, currentUser.id, currentUser.name); 
-                await loadStoreData(); 
-              } finally {
-                setIsPublishing(null);
-              }
-            }}
-            isPublished={storeDecks.some(sd => sd.originDeckId === editingDeck.id)}
-            isPublishing={isPublishing === editingDeck.id}
+            onPublish={async (d) => { setIsPublishing(d.id); try { await cloudService.publishToStore(d, currentUser.id, currentUser.name); await loadStoreData(); } finally { setIsPublishing(null); } }}
+            isPublished={storeDecks.some(sd => sd.originDeckId === editingDeck.id)} isPublishing={isPublishing === editingDeck.id}
           />
         )}
       </main>
-
-      {isProgressModalOpen && (
-        <StudyProgressModal 
-          user={currentUser} 
-          onClose={() => setIsProgressModalOpen(false)} 
-          language={language} 
-          studiedCount={studiedCardIds.size} 
-          dailyGoal={dailyGoal} 
-          streak={streak} 
-        />
-      )}
+      {isProgressModalOpen && <StudyProgressModal user={currentUser} onClose={() => setIsProgressModalOpen(false)} language={language} studiedCount={studiedCardIds.size} dailyGoal={dailyGoal} streak={streak} />}
     </div>
   );
 };

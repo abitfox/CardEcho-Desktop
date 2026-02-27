@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Deck, Language } from '../types';
 import { t } from '../services/i18n';
 

@@ -1,19 +1,34 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, Language } from '../types';
 import { t } from '../services/i18n';
 
 interface AnalysisPanelProps {
   card: Card | null;
   language: Language;
+  onToggleReview?: (cardId: string, isForReview: boolean) => Promise<void>;
 }
 
-const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ card, language }) => {
+const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ card, language, onToggleReview }) => {
+  const [isUpdating, setIsUpdating] = useState(false);
+
   if (!card) return (
     <div className="w-96 bg-white border-l border-gray-200 p-8 flex items-center justify-center text-gray-400 italic text-center">
       {t(language, 'learning.selectCard')}
     </div>
   );
+
+  const handleToggleReview = async () => {
+    if (!onToggleReview || isUpdating) return;
+    setIsUpdating(true);
+    try {
+      await onToggleReview(card.id, !card.isForReview);
+    } catch (err) {
+      console.error("Toggle review failed:", err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   return (
     <div className="w-96 bg-white border-l border-gray-200 flex flex-col h-full overflow-hidden shadow-2xl">
@@ -54,8 +69,21 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ card, language }) => {
       </div>
 
       <div className="p-6 bg-[#f8f9fa] border-t border-gray-100">
-        <button className="w-full bg-white border border-gray-200 py-3 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-sm flex items-center justify-center gap-2">
-          <span>❤️</span> {t(language, 'learning.addReview')}
+        <button 
+          onClick={handleToggleReview}
+          disabled={isUpdating}
+          className={`w-full py-3 rounded-xl text-sm font-semibold transition-all shadow-sm flex items-center justify-center gap-2 border ${
+            card.isForReview 
+              ? 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100' 
+              : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+          } disabled:opacity-50`}
+        >
+          {isUpdating ? (
+            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+          ) : (
+            <span>{card.isForReview ? '❤️' : '🤍'}</span>
+          )}
+          {t(language, 'learning.addReview')}
         </button>
       </div>
     </div>

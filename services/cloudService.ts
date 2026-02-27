@@ -155,6 +155,14 @@ export const cloudService = {
     }
   },
 
+  async toggleReviewCard(cardId: string, isForReview: boolean): Promise<void> {
+    const { error } = await supabase
+      .from('cards')
+      .update({ is_for_review: isForReview })
+      .eq('id', cardId);
+    if (error) throw error;
+  },
+
   async getDetailedTodayLogs(userId: string): Promise<{ card_id: string, studied_at: string, card_text: string }[]> {
     const todayStr = new Date().toISOString().split('T')[0];
     const { data, error } = await supabase
@@ -187,8 +195,6 @@ export const cloudService = {
 
   // --- DECKS & STORE ---
   async fetchStoreDecks(): Promise<Deck[]> {
-    // 尝试查询。如果数据库中没有 updated_at，SQL 会报错，从而导致不出结果。
-    // 这里增加一个 fallback，如果报错，尝试按 created_at 排序。
     let { data, error } = await supabase
       .from('store_decks')
       .select(`id, title, description, icon, source_text, author, user_id, created_at, updated_at, tags, origin_deck_id, store_cards (*)`)
@@ -227,14 +233,14 @@ export const cloudService = {
         breakdown: c.breakdown,
         voiceName: c.voice_name,
         audioDuration: c.audio_duration,
-        repeatCount: c.repeat_count || 3
+        repeatCount: c.repeat_count || 3,
+        isForReview: c.is_for_review || false
       })).sort((a: any, b: any) => a.id.localeCompare(b.id))
     }));
   },
 
   async publishToStore(deck: Deck, userId: string, userName: string): Promise<void> {
     const now = new Date().toISOString();
-    // 这里必须使用下划线命名与 DB 匹配
     const { data: existing } = await supabase.from('store_decks').select('id').eq('origin_deck_id', deck.id).eq('user_id', userId).maybeSingle();
     
     if (existing) {
@@ -258,7 +264,8 @@ export const cloudService = {
         breakdown: card.breakdown, 
         voice_name: card.voiceName, 
         audio_duration: card.audioDuration, 
-        repeat_count: card.repeatCount || 3 
+        repeat_count: card.repeatCount || 3,
+        is_for_review: card.isForReview || false
       }));
       await supabase.from('store_cards').insert(cardsToInsert as any);
     } else {
@@ -286,7 +293,8 @@ export const cloudService = {
         breakdown: card.breakdown, 
         voice_name: card.voiceName, 
         audio_duration: card.audioDuration, 
-        repeat_count: card.repeatCount || 3 
+        repeat_count: card.repeatCount || 3,
+        is_for_review: card.isForReview || false
       }));
       await supabase.from('store_cards').insert(cardsToInsert as any);
     }
@@ -318,7 +326,8 @@ export const cloudService = {
         breakdown: card.breakdown, 
         voice_name: card.voiceName, 
         audio_duration: card.audioDuration, 
-        repeat_count: card.repeatCount || 3 
+        repeat_count: card.repeatCount || 3,
+        is_for_review: card.isForReview || false
       }));
       await supabase.from('cards').upsert(cardsToInsert as any);
     }
@@ -349,7 +358,8 @@ export const cloudService = {
         breakdown: c.breakdown,
         voiceName: c.voice_name,
         audioDuration: c.audio_duration,
-        repeatCount: c.repeat_count || 3
+        repeatCount: c.repeat_count || 3,
+        isForReview: c.is_for_review || false
       })).sort((a: any, b: any) => a.id.localeCompare(b.id))
     }));
   },
@@ -418,7 +428,8 @@ export const cloudService = {
           breakdown: card.breakdown, 
           voice_name: card.voiceName, 
           audio_duration: card.audioDuration, 
-          repeat_count: card.repeatCount || 3 
+          repeat_count: card.repeatCount || 3,
+          is_for_review: card.isForReview || false
         }));
         await supabase.from('store_cards').insert(cardsToInsert as any);
       } catch (err: any) {
