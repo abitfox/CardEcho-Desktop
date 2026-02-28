@@ -231,6 +231,39 @@ export const disassembleText = async (rawText: string, model: string = 'gemini-3
   });
 };
 
+export const generateTrainingContent = async (sentence: string, model: string = 'gemini-3-flash-preview', systemInstruction: string) => {
+  return callWithRetry(async () => {
+    const response = await ai.models.generateContent({
+      model: model,
+      contents: [{ parts: [{ text: `Sentence: "${sentence}"` }] }],
+      config: {
+        systemInstruction: systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            trainingContent: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  point: { type: Type.STRING },
+                  meaning: { type: Type.STRING },
+                  phonetic: { type: Type.STRING },
+                  role: { type: Type.STRING }
+                },
+                required: ["point", "meaning", "phonetic", "role"]
+              }
+            }
+          },
+          required: ["trainingContent"]
+        }
+      }
+    });
+    return JSON.parse(response.text || "{\"trainingContent\":[]}");
+  });
+};
+
 export const generateAudio = async (text: string, voiceName: string = 'Kore'): Promise<{ url: string, duration: number } | null> => {
   return callWithRetry(async () => {
     const response = await ai.models.generateContent({

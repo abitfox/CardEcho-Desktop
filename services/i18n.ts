@@ -4,12 +4,13 @@ import { Language } from '../types';
 const translations = {
   en: {
     sidebar: {
-      library: 'My Decks',
+      library: 'My Card Packs',
       store: 'Store',
       create: 'Create',
       learning: 'Focus Mode',
       stats: 'Stats',
       settings: 'Settings',
+      training: 'Training Mode',
       progress: 'Daily Progress',
       cards: 'cards',
       logout: 'Logout'
@@ -65,14 +66,14 @@ const translations = {
       edit: 'EDIT',
       tabCreated: 'Created By Me',
       tabSubscribed: 'Subscribed',
-      deleteConfirmTitle: 'Delete Learning Deck',
-      deleteConfirmMsg: 'Are you sure you want to permanently delete this deck? This action cannot be undone and all card progress will be lost.',
-      deleteAction: 'Delete Deck',
+      deleteConfirmTitle: 'Delete Learning Pack',
+      deleteConfirmMsg: 'Are you sure you want to permanently delete this pack? This action cannot be undone and all card progress will be lost.',
+      deleteAction: 'Delete Pack',
       deleteCancel: 'Cancel'
     },
     store: {
       title: 'Content Store',
-      desc: 'Discover and subscribe to curated language decks created by experts.',
+      desc: 'Discover and subscribe to curated language packs created by experts.',
       subscribing: 'Subscribing...',
       subscribed: 'Subscribed',
       myPublished: 'My Published',
@@ -80,10 +81,12 @@ const translations = {
       deleteFromStore: 'Delete from Store',
       deleteConfirmTitle: 'Delete Marketplace Listing',
       deleteConfirmMsg: 'You are about to delete this resource from the marketplace. Users will no longer be able to discover or subscribe to it. This action is irreversible.',
-      refresh: 'Refresh Store'
+      refresh: 'Refresh Store',
+      listingSettings: 'Marketplace Listing Settings',
+      preview: 'Pack Preview'
     },
     create: {
-      title: 'Create New Deck',
+      title: 'Create New Pack',
       desc: 'Paste your text and let CardEcho AI disassemble it into bite-sized learning cards.',
       generate: 'Generate Cards with AI',
       cancel: 'Cancel',
@@ -97,9 +100,13 @@ const translations = {
       vocabulary: 'Vocabulary Break-up',
       grammar: 'Grammar Points',
       context: 'Usage Context',
-      addReview: 'Add to Review Deck',
+      addReview: 'Add to Review Pack',
+      startTraining: 'Start Training',
       selectCard: 'Select a card to see analysis',
-      sentence: 'Sentence'
+      sentence: 'Sentence',
+      play: 'Play',
+      noGrammar: 'No grammar notes available.',
+      noContext: 'No context available.'
     },
     editor: {
       title: 'Card Editor',
@@ -113,8 +120,14 @@ const translations = {
       vocabulary: 'Vocabulary Breakdown',
       vocabDesc: 'Detailed analysis of key words in the sentence',
       addWord: 'Add Word',
+      trainingContent: 'Training Content',
+      trainingDesc: 'Key points for training mode (words, phrases, or sentences)',
+      addTrainingItem: 'Add Training Item',
+      generateTraining: 'AI Generate Training',
       aiVoice: 'AI Voice Configuration',
       voiceDesc: 'Choose a narrator style for this card',
+      aiEnrichmentTitle: 'AI Content Enrichment',
+      aiEnrichmentDesc: 'Analyze card for vocab and grammar with current AI brain.',
       generateVoice: 'Generate AI Voice',
       generateAllVoice: 'Generate All Audio',
       generating: 'Generating...',
@@ -125,19 +138,27 @@ const translations = {
       phonetic: 'Phonetic',
       meaning: 'Meaning',
       role: 'Role',
+      point: 'Point',
+      audio: 'Audio',
+      regenerate: 'Regenerate',
       synced: 'Synced to Cloud',
       noAudio: 'No audio asset generated for this card yet.',
-      selectCardPrompt: 'Select a card from the list to edit its content and audio.'
+      selectCardPrompt: 'Select a card from the list to edit its content and audio.',
+      coverIcon: 'Cover Icon',
+      deckTitle: 'Pack Title',
+      deckDescription: 'Pack Description',
+      deckSettings: 'Pack Settings'
     }
   },
   zh: {
     sidebar: {
-      library: '我的学习',
+      library: '我的卡包',
       store: '内容商城',
       create: '创建新卡片',
       learning: '学习模式',
       stats: '统计',
       settings: '设置',
+      training: '训练模式',
       progress: '今日进度',
       cards: '张卡片',
       logout: '退出登录'
@@ -193,8 +214,8 @@ const translations = {
       edit: '编辑',
       tabCreated: '我创建的',
       tabSubscribed: '外部订阅',
-      deleteConfirmTitle: '删除学习包',
-      deleteConfirmMsg: '您确定要永久删除这个学习包吗？此操作不可撤销，所有卡片及进度都将丢失。',
+      deleteConfirmTitle: '删除卡包',
+      deleteConfirmMsg: '您确定要永久删除这个卡包吗？此操作不可撤销，所有卡片及进度都将丢失。',
       deleteAction: '确认删除',
       deleteConfirmAction: '确认删除',
       deleteCancel: '取消'
@@ -209,10 +230,12 @@ const translations = {
       deleteFromStore: '从商城下架',
       deleteConfirmTitle: '从商城下架资源',
       deleteConfirmMsg: '您正在执行管理员操作。此资源将从商城中永久移除，用户将无法再搜索或订阅该内容。此操作不可恢复。',
-      refresh: '刷新商城'
+      refresh: '刷新商城',
+      listingSettings: '商城资源设置',
+      preview: '卡包预览'
     },
     create: {
-      title: '创建新资源包',
+      title: '创建新卡包',
       desc: '粘贴您的文本，让 CardEcho AI 将其拆解为易于学习的卡片。',
       generate: '使用 AI 生成卡片',
       cancel: '取消',
@@ -227,8 +250,12 @@ const translations = {
       grammar: '语法要点',
       context: '使用语境',
       addReview: '加入复习计划',
+      startTraining: '进入训练模式',
       selectCard: '选择一张卡片以查看分析',
-      sentence: '句子'
+      sentence: '句子',
+      play: '播放',
+      noGrammar: '暂无语法解析。',
+      noContext: '暂无使用语境。'
     },
     editor: {
       title: '卡片编辑器',
@@ -242,8 +269,14 @@ const translations = {
       vocabulary: '词汇拆解',
       vocabDesc: '针对句中重点词汇的详细分析',
       addWord: '添加单词',
+      trainingContent: '训练模式内容',
+      trainingDesc: '针对训练模式的考核点（单词、短语或句子）',
+      addTrainingItem: '添加考核点',
+      generateTraining: 'AI 拆解训练内容',
       aiVoice: 'AI 语音配置',
       voiceDesc: '为此卡片选择一位朗读者风格',
+      aiEnrichmentTitle: 'AI 内容增强',
+      aiEnrichmentDesc: '使用当前 AI 引擎分析卡片的词汇和语法。',
       generateVoice: '生成 AI 语音',
       generateAllVoice: '批量生成全包语音',
       generating: '正在生成并同步...',
@@ -254,9 +287,16 @@ const translations = {
       phonetic: '音标',
       meaning: '释义',
       role: '词性',
+      point: '考核点',
+      audio: '音频',
+      regenerate: '重新生成',
       synced: '已同步至云端',
       noAudio: '此卡片尚未生成音频资源。',
-      selectCardPrompt: '从左侧列表中选择一张卡片以编辑内容和语音。'
+      selectCardPrompt: '从左侧列表中选择一张卡片以编辑内容和语音。',
+      coverIcon: '封面图标',
+      deckTitle: '卡包名称',
+      deckDescription: '卡包描述',
+      deckSettings: '卡包设置'
     }
   }
 };

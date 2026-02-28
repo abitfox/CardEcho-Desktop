@@ -9,6 +9,7 @@ import Store from './components/Store';
 import DeckEditor from './components/DeckEditor';
 import Settings from './components/Settings';
 import Profile from './components/Profile';
+import TrainingMode from './components/TrainingMode';
 import { Statistics } from './components/Statistics';
 import { StudyProgressModal } from './components/StudyProgressModal'; 
 import { DebugWindow } from './components/DebugWindow';
@@ -54,6 +55,17 @@ const App: React.FC = () => {
   const [allTimeCount, setAllTimeCount] = useState(0);
   const [streak, setStreak] = useState(0);
   const dailyGoal = currentUser?.dailyGoal || 20;
+
+  useEffect(() => {
+    const handleStartTraining = (e: any) => {
+      if (e.detail?.card) {
+        setActiveCard(e.detail.card);
+        setCurrentSection(AppSection.TRAINING);
+      }
+    };
+    window.addEventListener('start-training', handleStartTraining);
+    return () => window.removeEventListener('start-training', handleStartTraining);
+  }, []);
 
   const loadUserData = async (user: User) => {
     try {
@@ -214,7 +226,7 @@ const App: React.FC = () => {
       createdAt: Date.now()
     };
     setActiveDeck(virtualReviewDeck);
-    setCurrentSection(AppSection.LEARNING);
+    handleSectionChange(AppSection.LEARNING);
     debugService.log("Starting intensive review session with marked cards", 'ai');
   };
 
@@ -227,7 +239,7 @@ const App: React.FC = () => {
     setStudiedCardIds(new Set());
     setStreak(0);
     setAllTimeCount(0);
-    setCurrentSection(AppSection.LIBRARY);
+    handleSectionChange(AppSection.LIBRARY);
     debugService.log("User logged out, local cache cleared", 'warn');
   };
 
@@ -268,12 +280,25 @@ const App: React.FC = () => {
 
   const hasReviewCards = getReviewCards().length > 0;
 
+  const handleSectionChange = (section: AppSection) => {
+    if (section === AppSection.TRAINING) {
+      if (!activeCard && activeDeck && activeDeck.cards.length > 0) {
+        setActiveCard(activeDeck.cards[0]);
+      } else if (!activeCard && !activeDeck) {
+        // If no deck, maybe go to library instead
+        setCurrentSection(AppSection.LIBRARY);
+        return;
+      }
+    }
+    setCurrentSection(section);
+  };
+
   return (
     <div className="flex h-screen bg-white">
       {showDebug && <DebugWindow />}
       
       <Sidebar 
-        currentSection={currentSection} onSectionChange={setCurrentSection} 
+        currentSection={currentSection} onSectionChange={handleSectionChange} 
         user={currentUser} onLogout={handleLogout} 
         language={language} hasDecks={decks.length > 0} 
         studiedCount={studiedCardIds.size} dailyGoal={dailyGoal}
@@ -297,7 +322,7 @@ const App: React.FC = () => {
                       <span>❤️</span>{language === 'zh' ? '开始复习' : 'REVIEW'}
                     </button>
                   )}
-                  <button onClick={() => setCurrentSection(AppSection.CREATE)} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 flex items-center gap-2"><span className="text-xl">✨</span> {t(language, 'sidebar.create')}</button>
+                  <button onClick={() => handleSectionChange(AppSection.CREATE)} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 flex items-center gap-2"><span className="text-xl">✨</span> {t(language, 'sidebar.create')}</button>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -317,8 +342,8 @@ const App: React.FC = () => {
                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-gray-50 px-2 py-1 rounded">{deck.cards.length} {t(language, 'sidebar.cards')}</span>
                         <div className="flex gap-2">
                           <button onClick={() => setDeckToDelete(deck)} className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                          <button onClick={() => { setEditingDeck(deck); setCurrentSection(AppSection.EDIT); }} className="p-3 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
-                          <button onClick={() => { handleSetActiveDeck(deck); setCurrentSection(AppSection.LEARNING); }} className="px-6 py-3 bg-gray-900 text-white text-xs font-bold rounded-xl hover:bg-blue-600 transition-all shadow-lg">{t(language, 'library.study')}</button>
+                          <button onClick={() => { setEditingDeck(deck); handleSectionChange(AppSection.EDIT); }} className="p-3 text-gray-300 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+                          <button onClick={() => { handleSetActiveDeck(deck); handleSectionChange(AppSection.LEARNING); }} className="px-6 py-3 bg-gray-900 text-white text-xs font-bold rounded-xl hover:bg-blue-600 transition-all shadow-lg">{t(language, 'library.study')}</button>
                         </div>
                       </div>
                     </div>
@@ -334,11 +359,11 @@ const App: React.FC = () => {
             <AnalysisPanel card={activeCard} language={language} onToggleReview={handleToggleReview} />
           </div>
         )}
-        {currentSection === AppSection.CREATE && <ContentCreator onSave={(d) => cloudService.saveDeck(d, currentUser.id).then(() => cloudService.fetchUserDecks(currentUser.id).then(setDecks)).then(() => setCurrentSection(AppSection.LIBRARY))} onCancel={() => setCurrentSection(AppSection.LIBRARY)} language={language} provider={aiProvider} selectedModel={selectedModel} />}
+        {currentSection === AppSection.CREATE && <ContentCreator onSave={(d) => cloudService.saveDeck(d, currentUser.id).then(() => cloudService.fetchUserDecks(currentUser.id).then(setDecks)).then(() => handleSectionChange(AppSection.LIBRARY))} onCancel={() => handleSectionChange(AppSection.LIBRARY)} language={language} provider={aiProvider} selectedModel={selectedModel} />}
         {currentSection === AppSection.STORE && (
           <Store 
             featuredDecks={storeDecks} 
-            onSubscribe={(d) => cloudService.saveDeck({ ...d, id: crypto.randomUUID(), isSubscribed: true, createdAt: Date.now() }, currentUser.id).then(() => cloudService.fetchUserDecks(currentUser.id).then(setDecks)).then(() => setCurrentSection(AppSection.LEARNING))} 
+            onSubscribe={(d) => cloudService.saveDeck({ ...d, id: crypto.randomUUID(), isSubscribed: true, createdAt: Date.now() }, currentUser.id).then(() => cloudService.fetchUserDecks(currentUser.id).then(setDecks)).then(() => handleSectionChange(AppSection.LEARNING))} 
             subscribedTitles={decks.map(d => d.title)} 
             language={language} userId={currentUser.id} userRole={currentUser.role} 
             onUpdateStoreMetadata={cloudService.updateStoreDeckMetadata} onDeleteStoreDeck={cloudService.deleteStoreDeck} onRefresh={loadStoreData}
@@ -356,13 +381,21 @@ const App: React.FC = () => {
           />
         )}
         {currentSection === AppSection.PROFILE && <Profile user={currentUser} onUpdateUser={setCurrentUser} language={language} />}
+        {currentSection === AppSection.TRAINING && activeCard && (
+          <TrainingMode 
+            card={activeCard} 
+            language={language} 
+            voiceProvider={voiceProvider} 
+            onExit={() => handleSectionChange(AppSection.LEARNING)} 
+          />
+        )}
         {currentSection === AppSection.EDIT && editingDeck && (
           <DeckEditor 
             deck={editingDeck} language={language} provider={aiProvider} model={selectedModel}
             voiceProvider={voiceProvider}
-            onCancel={() => {setEditingDeck(null); setCurrentSection(AppSection.LIBRARY);}} 
+            onCancel={() => {setEditingDeck(null); handleSectionChange(AppSection.LIBRARY);}} 
             onSave={async (d) => { await cloudService.saveDeck(d, currentUser.id); const updated = await cloudService.fetchUserDecks(currentUser.id); setDecks(updated); const freshDeck = updated.find(item => item.id === d.id); if (freshDeck) setEditingDeck(freshDeck); }}
-            onStartLearning={(d) => { handleSetActiveDeck(d); setCurrentSection(AppSection.LEARNING); }}
+            onStartLearning={(d) => { handleSetActiveDeck(d); handleSectionChange(AppSection.LEARNING); }}
             onPublish={async (d) => { setIsPublishing(d.id); try { await cloudService.publishToStore(d, currentUser.id, currentUser.name); await loadStoreData(); } finally { setIsPublishing(null); } }}
             isPublished={storeDecks.some(sd => sd.originDeckId === editingDeck.id)} isPublishing={isPublishing === editingDeck.id}
           />

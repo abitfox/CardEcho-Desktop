@@ -56,19 +56,19 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ card, language, onToggleR
         <section>
           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">{t(language, 'learning.grammar')}</h3>
           <div className="bg-gray-50 p-4 rounded-xl text-sm leading-relaxed text-gray-700 border-l-4 border-blue-500">
-            {card.grammarNote || 'No grammar notes available.'}
+            {card.grammarNote || t(language, 'learning.noGrammar')}
           </div>
         </section>
 
         <section>
           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">{t(language, 'learning.context')}</h3>
           <p className="text-sm text-gray-600 leading-relaxed italic">
-            "{card.context || 'No context available.'}"
+            "{card.context || t(language, 'learning.noContext')}"
           </p>
         </section>
       </div>
 
-      <div className="p-6 bg-[#f8f9fa] border-t border-gray-100">
+      <div className="p-6 bg-[#f8f9fa] border-t border-gray-100 space-y-3">
         <button 
           onClick={handleToggleReview}
           disabled={isUpdating}
@@ -85,6 +85,21 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ card, language, onToggleR
           )}
           {t(language, 'learning.addReview')}
         </button>
+
+        {card.trainingContent && card.trainingContent.length > 0 && (
+          <button 
+            onClick={() => {
+              // We need a way to trigger training mode from here. 
+              // I'll assume App.tsx will handle a custom event or state change.
+              const event = new CustomEvent('start-training', { detail: { card } });
+              window.dispatchEvent(event);
+            }}
+            className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-all shadow-md flex items-center justify-center gap-2 active:scale-[0.98]"
+          >
+            <span>🎯</span>
+            {t(language, 'learning.startTraining')}
+          </button>
+        )}
       </div>
     </div>
   );

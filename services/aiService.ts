@@ -92,6 +92,49 @@ export const disassembleText = async (rawText: string, provider: AIProvider, mod
   }
 };
 
+export const generateTrainingContent = async (sentence: string, provider: AIProvider, model: AIModel) => {
+  debugService.log(`Generating training content via ${provider}...`, 'info', sentence);
+  const systemPrompt = `You are a professional language tutor. Analyze the English sentence and extract 3-5 key training points (words, phrases, or the full sentence). 
+  Return JSON with a field 'trainingContent' which is an array of objects.
+  Each object MUST have:
+  - point: (English word, phrase, or sentence)
+  - meaning: (Chinese translation)
+  - phonetic: (Standard IPA for words/phrases, or empty for sentences)
+  - role: (Part of speech in Chinese, e.g., 名词, 动词, 短语, 句子)
+  
+  The last item should always be the full sentence itself.`;
+
+  if (provider === 'google') {
+    return gemini.generateTrainingContent(sentence, model, systemPrompt);
+  } else {
+    const resText = await callDeepSeek(model, systemPrompt, `Sentence: "${sentence}"`, 'json_object');
+    return JSON.parse(resText || "{\"trainingContent\":[]}");
+  }
+};
+
+export const generateTrainingChallenges = async (card: Card, model: AIModel = 'deepseek-chat') => {
+  const systemPrompt = `You are an English language coach. Given an English sentence, identify 2-3 key words or phrases that are most important for a learner to master. 
+  Return a JSON object with a field 'challenges' which is an array of objects.
+  Each object in 'challenges' should have:
+  - type: 'word' | 'phrase' | 'sentence'
+  - content: the English text to be tested
+  - translation: Chinese translation of the content
+  
+  The challenges should be ordered: first the words/phrases, then finally the full sentence.
+  Example input: "No mercy, no retreat, victory is ours."
+  Example output: {
+    "challenges": [
+      { "type": "word", "content": "mercy", "translation": "仁慈" },
+      { "type": "word", "content": "retreat", "translation": "撤退" },
+      { "type": "word", "content": "victory", "translation": "胜利" },
+      { "type": "sentence", "content": "No mercy, no retreat, victory is ours.", "translation": "不留情面，不准撤退，胜利属于我们。" }
+    ]
+  }`;
+  
+  const resText = await callDeepSeek(model, systemPrompt, `Sentence: "${card.text}"`, 'json_object');
+  return JSON.parse(resText || "{\"challenges\":[]}");
+};
+
 // --- TTS 路由逻辑 ---
 // 修改此处：默认提供商改为 'doubao'
 export const generateAudio = async (text: string, voiceName: string, provider: VoiceProvider = 'doubao', speed: number = 1.0) => {

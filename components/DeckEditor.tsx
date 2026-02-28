@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Deck, Card, WordBreakdown, Language, AIProvider, AIModel, VoiceProvider } from '../types';
-import { generateAudio, analyzeSentence, playAudio, stopAllAudio } from '../services/aiService';
+import { Deck, Card, WordBreakdown, TrainingItem, Language, AIProvider, AIModel, VoiceProvider } from '../types';
+import { generateAudio, analyzeSentence, generateTrainingContent, playAudio, stopAllAudio } from '../services/aiService';
 import { cloudService } from '../services/cloudService';
 import { t } from '../services/i18n';
 
@@ -140,6 +140,7 @@ const DeckEditor: React.FC<DeckEditorProps> = ({
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false); 
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
+  const [isGeneratingTraining, setIsGeneratingTraining] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -234,7 +235,8 @@ const DeckEditor: React.FC<DeckEditorProps> = ({
 
   const handleBreakdownChange = (idx: number, field: keyof WordBreakdown, value: string) => {
     if (!activeCard) return;
-    const newBreakdown = [...activeCard.breakdown];
+    const currentBreakdown = activeCard.breakdown || [];
+    const newBreakdown = [...currentBreakdown];
     newBreakdown[idx] = { ...newBreakdown[idx], [field]: value };
     handleCardChange('breakdown', newBreakdown);
   };
@@ -242,13 +244,95 @@ const DeckEditor: React.FC<DeckEditorProps> = ({
   const addBreakdownItem = () => {
     if (!activeCard) return;
     const newItem: WordBreakdown = { word: '', phonetic: '', meaning: '', role: '' };
-    handleCardChange('breakdown', [...activeCard.breakdown, newItem]);
+    handleCardChange('breakdown', [...(activeCard.breakdown || []), newItem]);
   };
 
   const removeBreakdownItem = (idx: number) => {
     if (!activeCard) return;
-    const newBreakdown = activeCard.breakdown.filter((_, i) => i !== idx);
+    const newBreakdown = (activeCard.breakdown || []).filter((_, i) => i !== idx);
     handleCardChange('breakdown', newBreakdown);
+  };
+
+  const handleGenerateTraining = async () => {
+    if (!activeCard || !activeCard.text.trim()) return;
+    setIsGeneratingTraining(true);
+    try {
+      const result = await generateTrainingContent(activeCard.text, provider, model);
+      if (result && result.trainingContent) {
+        const trainingWithAudio = await Promise.all(result.trainingContent.map(async (item: TrainingItem) => {
+          try {
+            const audioResult = await generateAudio(item.point, selectedVoice, voiceProvider, ttsSpeed);
+            if (audioResult) {
+              let finalAudioUrl = audioResult.url;
+              if (voiceProvider !== 'doubao') {
+                const uploadedUrl = await cloudService.uploadAudio(`${activeCard.id}_training_${Date.now()}`, audioResult.url);
+                if (uploadedUrl) finalAudioUrl = uploadedUrl;
+              }
+              return { ...item, audioUrl: finalAudioUrl };
+            }
+          } catch (e) {
+            console.error("Audio generation failed for training item:", item.point, e);
+          }
+          return item;
+        }));
+
+        const newCards = [...editedDeck.cards];
+        newCards[activeCardIdx!] = {
+          ...newCards[activeCardIdx!],
+          trainingContent: trainingWithAudio
+        };
+        const updatedDeck = { ...editedDeck, cards: newCards };
+        setEditedDeck(updatedDeck);
+        
+        // Auto-save after generation
+        await onSave(updatedDeck);
+        setSaveStatus('saved');
+      }
+    } catch (error) {
+      console.error("AI Training Generation failed:", error);
+    } finally {
+      setIsGeneratingTraining(false);
+    }
+  };
+
+  const handleRegenerateTrainingAudio = async (idx: number) => {
+    if (!activeCard || !activeCard.trainingContent) return;
+    const item = activeCard.trainingContent[idx];
+    if (!item.point.trim()) return;
+
+    try {
+      const audioResult = await generateAudio(item.point, selectedVoice, voiceProvider, ttsSpeed);
+      if (audioResult) {
+        let finalAudioUrl = audioResult.url;
+        if (voiceProvider !== 'doubao') {
+          const uploadedUrl = await cloudService.uploadAudio(`${activeCard.id}_training_${Date.now()}`, audioResult.url);
+          if (uploadedUrl) finalAudioUrl = uploadedUrl;
+        }
+        handleTrainingChange(idx, 'audioUrl', finalAudioUrl);
+      }
+    } catch (e) {
+      console.error("Regenerate audio failed:", e);
+    }
+  };
+
+  const addTrainingItem = () => {
+    if (!activeCard) return;
+    const newItem: TrainingItem = { point: '', meaning: '', phonetic: '', role: '', audioUrl: '' };
+    handleCardChange('trainingContent', [...(activeCard.trainingContent || []), newItem]);
+  };
+
+  const handleTrainingChange = (idx: number, field: keyof TrainingItem, value: string) => {
+    if (!activeCard) return;
+    const currentTraining = activeCard.trainingContent || [];
+    const newTraining = [...currentTraining];
+    newTraining[idx] = { ...newTraining[idx], [field]: value };
+    handleCardChange('trainingContent', newTraining);
+  };
+
+  const removeTrainingItem = (idx: number) => {
+    if (!activeCard) return;
+    const newTraining = (activeCard.trainingContent || []).filter((_, i) => i !== idx);
+    handleCardChange('trainingContent', newTraining);
   };
 
   const handleTtsGenerate = async () => {
@@ -500,7 +584,12 @@ const DeckEditor: React.FC<DeckEditorProps> = ({
 
       <div className="flex-1 overflow-y-auto p-12 bg-white custom-scrollbar">
         <div className="max-w-4xl mx-auto flex justify-between items-center mb-12">
-            <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{activeCardIdx === null ? 'Deck Settings' : t(language, 'editor.title')}</h2>
+            <div>
+               <h2 className="text-2xl font-bold text-gray-900 tracking-tight">{activeCardIdx === null ? t(language, 'editor.deckSettings') : t(language, 'editor.title')}</h2>
+               <p className="text-xs text-gray-400 mt-1">
+                 {activeCardIdx === null ? 'Manage main identity and source material.' : `Editing Card ${activeCardIdx + 1} of ${editedDeck.cards.length}`}
+               </p>
+            </div>
             <div className="flex gap-3">
                <button onClick={onCancel} className="px-4 py-2 text-sm text-gray-400 font-bold hover:text-gray-600 transition-colors">{t(language, 'editor.cancel')}</button>
                <button 
@@ -522,17 +611,26 @@ const DeckEditor: React.FC<DeckEditorProps> = ({
              <section className="bg-white border border-gray-100 rounded-[32px] p-8 md:p-12 shadow-sm relative overflow-hidden">
                 <div className="flex flex-col md:flex-row gap-12 items-start relative z-10">
                    <div className="space-y-4 flex flex-col items-center">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center w-full">Cover Icon</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center w-full">{t(language, 'editor.coverIcon')}</label>
                       <input type="text" value={editedDeck.icon} onChange={(e) => setEditedDeck({...editedDeck, icon: e.target.value})} className="w-28 h-28 text-5xl bg-gray-50 border border-gray-100 rounded-3xl text-center outline-none focus:bg-white transition-all shadow-inner" placeholder="🔥" />
                    </div>
                    <div className="flex-1 space-y-8 w-full">
                       <div className="space-y-3">
-                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Title</label>
+                         <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">{t(language, 'editor.deckTitle')}</label>
                          <input value={editedDeck.title} onChange={(e) => setEditedDeck({ ...editedDeck, title: e.target.value })} className="w-full text-xl font-bold text-gray-900 bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 outline-none focus:bg-white transition-all shadow-inner" placeholder="e.g. Daily French" />
                       </div>
                       <div className="space-y-3">
-                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Description</label>
+                         <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">{t(language, 'editor.deckDescription')}</label>
                          <textarea value={editedDeck.description} onChange={(e) => setEditedDeck({ ...editedDeck, description: e.target.value })} className="w-full text-sm font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 outline-none focus:bg-white h-32 resize-none leading-relaxed shadow-inner" placeholder="Description..." />
+                      </div>
+                      <div className="space-y-3">
+                         <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">{t(language, 'editor.originalText')}</label>
+                         <textarea 
+                            value={editedDeck.sourceText || ''} 
+                            onChange={(e) => setEditedDeck({ ...editedDeck, sourceText: e.target.value })} 
+                            className="w-full text-sm font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 outline-none focus:bg-white h-48 resize-none leading-relaxed shadow-inner custom-scrollbar" 
+                            placeholder="Paste source text here..." 
+                         />
                       </div>
                    </div>
                 </div>
@@ -544,8 +642,8 @@ const DeckEditor: React.FC<DeckEditorProps> = ({
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white text-[10px]">⚡</div>
                   <div>
-                    <h3 className="font-bold text-blue-900 text-sm">AI Content Enrichment ({provider.toUpperCase()})</h3>
-                    <p className="text-xs text-blue-700/70">Analyze card for vocab and grammar with current AI brain.</p>
+                    <h3 className="font-bold text-blue-900 text-sm">{t(language, 'editor.aiEnrichmentTitle')} ({provider.toUpperCase()})</h3>
+                    <p className="text-xs text-blue-700/70">{t(language, 'editor.aiEnrichmentDesc')}</p>
                   </div>
                 </div>
                 <button onClick={handleAiAnalyze} disabled={isAnalyzing || !activeCard.text.trim()} className="bg-white border border-blue-200 text-blue-600 px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2 disabled:opacity-50">
@@ -556,16 +654,27 @@ const DeckEditor: React.FC<DeckEditorProps> = ({
 
              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-4">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t(language, 'editor.originalText')}</label>
+                  <h3 className="font-bold text-gray-800">{t(language, 'editor.originalText')}</h3>
                   <textarea value={activeCard.text} onChange={(e) => handleCardChange('text', e.target.value)} className="w-full p-4 border border-gray-200 rounded-xl text-lg font-bold focus:border-blue-500 outline-none transition-all shadow-sm" rows={3} />
                 </div>
                 <div className="space-y-4">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">{t(language, 'editor.translation')}</label>
+                  <h3 className="font-bold text-gray-800">{t(language, 'editor.translation')}</h3>
                   <textarea value={activeCard.translation} onChange={(e) => handleCardChange('translation', e.target.value)} className="w-full p-4 border border-gray-200 rounded-xl text-lg text-gray-600 focus:border-blue-500 outline-none bg-gray-50/50" rows={3} />
                 </div>
              </div>
 
-             {/* AI VOICE CONFIGURATION - UPDATED TO NEW DOUBAO LOGIC */}
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-4">
+                  <h3 className="font-bold text-gray-800">{t(language, 'editor.grammarNote')}</h3>
+                  <textarea value={activeCard.grammarNote} onChange={(e) => handleCardChange('grammarNote', e.target.value)} className="w-full p-4 border border-gray-200 rounded-xl text-sm text-gray-700 focus:border-blue-500 outline-none bg-gray-50/30" rows={4} />
+                </div>
+                <div className="space-y-4">
+                  <h3 className="font-bold text-gray-800">{t(language, 'editor.usageContext')}</h3>
+                  <textarea value={activeCard.context} onChange={(e) => handleCardChange('context', e.target.value)} className="w-full p-4 border border-gray-200 rounded-xl text-sm text-gray-600 italic focus:border-blue-500 outline-none bg-gray-50/30" rows={4} />
+                </div>
+             </div>
+
+             {/* AI VOICE CONFIGURATION - MOVED UP */}
              <div className="p-8 bg-gray-50 rounded-[32px] border border-gray-100 space-y-8 mt-8 relative overflow-hidden shadow-sm">
                 {isBatchGenerating && (
                   <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-30 flex flex-col items-center justify-center p-12 animate-in fade-in duration-300">
@@ -694,29 +803,145 @@ const DeckEditor: React.FC<DeckEditorProps> = ({
                            )}
                         </button>
                         <div className="flex-1">
-                           <div className="flex items-center justify-between">
-                              <p className="text-xs font-bold text-gray-800">{language === 'zh' ? '预览播放' : 'Preview Resource'}</p>
-                              {(activeCard.audioDuration !== undefined && activeCard.audioDuration !== null) && (
-                                <div className="flex items-center gap-1 text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                  {activeCard.audioDuration.toFixed(1)}s
-                                </div>
-                              )}
-                           </div>
-                           <p className="text-[10px] text-gray-400 mt-1">
-                              音色: {
-                                ([...Object.values(ALL_DOUBAO_VOICES).flat(), ...GEMINI_VOICES])
-                                  .find(v => v.id === (activeCard.voiceName || selectedVoice))?.label || (activeCard.voiceName || selectedVoice)
-                              } | 介绍: {
-                                ([...Object.values(ALL_DOUBAO_VOICES).flat(), ...GEMINI_VOICES])
-                                  .find(v => v.id === (activeCard.voiceName || selectedVoice))?.desc || 'HQ Audio Resource'
-                              }
-                           </p>
+                          <div className="flex justify-between items-center mb-2">
+                             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{language === 'zh' ? '预览音频' : 'PREVIEW AUDIO'}</span>
+                             <span className="text-[10px] font-mono text-gray-400">{activeCard.audioDuration ? `${activeCard.audioDuration.toFixed(1)}s` : '--'}</span>
+                          </div>
+                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                             <div className={`h-full transition-all duration-300 ${voiceProvider === 'doubao' ? 'bg-purple-600' : 'bg-blue-600'}`} style={{ width: isPlayingAudio ? '100%' : '0%', transitionDuration: isPlayingAudio ? `${activeCard.audioDuration || 3}s` : '0s' }}></div>
+                          </div>
                         </div>
                       </div>
-                    )}
+                   )}
                 </div>
              </div>
+
+             <section className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <h3 className="font-bold text-gray-800">{t(language, 'editor.vocabulary')}</h3>
+                    <p className="text-xs text-gray-500">{t(language, 'editor.vocabDesc')}</p>
+                  </div>
+                  <button onClick={addBreakdownItem} className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                    {t(language, 'editor.addWord')}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  {(activeCard.breakdown || []).map((item, idx) => (
+                    <div key={idx} className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100 grid grid-cols-1 md:grid-cols-4 gap-4 relative group">
+                      <button onClick={() => removeBreakdownItem(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-white border border-gray-200 text-gray-400 rounded-full flex items-center justify-center hover:text-red-500 hover:border-red-200 transition-all opacity-0 group-hover:opacity-100 shadow-sm">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                      </button>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">{t(language, 'editor.word')}</label>
+                        <input value={item.word} onChange={(e) => handleBreakdownChange(idx, 'word', e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-blue-500" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">{t(language, 'editor.phonetic')}</label>
+                        <input value={item.phonetic} onChange={(e) => handleBreakdownChange(idx, 'phonetic', e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-mono outline-none focus:border-blue-500" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">{t(language, 'editor.role')}</label>
+                        <input value={item.role} onChange={(e) => handleBreakdownChange(idx, 'role', e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">{t(language, 'editor.meaning')}</label>
+                        <input value={item.meaning} onChange={(e) => handleBreakdownChange(idx, 'meaning', e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+             </section>
+
+             <section className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <h3 className="font-bold text-gray-800">{t(language, 'editor.trainingContent')}</h3>
+                    <p className="text-xs text-gray-500">{t(language, 'editor.trainingDesc')}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={handleGenerateTraining} 
+                      disabled={isGeneratingTraining || !activeCard.text.trim()}
+                      className="px-4 py-2 bg-purple-50 text-purple-600 rounded-xl text-xs font-bold hover:bg-purple-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {isGeneratingTraining ? (
+                        <div className="w-3 h-3 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                      )}
+                      {t(language, 'editor.generateTraining')}
+                    </button>
+                    <button onClick={addTrainingItem} className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                      {t(language, 'editor.addTrainingItem')}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  {(activeCard.trainingContent || []).map((item, idx) => (
+                    <div key={idx} className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100 grid grid-cols-1 md:grid-cols-5 gap-4 relative group">
+                      <button onClick={() => removeTrainingItem(idx)} className="absolute -top-2 -right-2 w-6 h-6 bg-white border border-gray-200 text-gray-400 rounded-full flex items-center justify-center hover:text-red-500 hover:border-red-200 transition-all opacity-0 group-hover:opacity-100 shadow-sm">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                      </button>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">{t(language, 'editor.point')}</label>
+                        <input value={item.point} onChange={(e) => handleTrainingChange(idx, 'point', e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold outline-none focus:border-blue-500" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">{t(language, 'editor.phonetic')}</label>
+                        <input value={item.phonetic} onChange={(e) => handleTrainingChange(idx, 'phonetic', e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-mono outline-none focus:border-blue-500" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">{t(language, 'editor.role')}</label>
+                        <input value={item.role} onChange={(e) => handleTrainingChange(idx, 'role', e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">{t(language, 'editor.meaning')}</label>
+                        <input value={item.meaning} onChange={(e) => handleTrainingChange(idx, 'meaning', e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">{t(language, 'editor.audio')}</label>
+                        <div className="flex items-center gap-2 h-[38px]">
+                          {item.audioUrl && item.audioUrl !== '#' ? (
+                            <>
+                              <button 
+                                onClick={() => playAudio(item.audioUrl!)}
+                                className="flex-1 h-full bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all flex items-center justify-center gap-2 text-xs font-bold"
+                                title="Play"
+                              >
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                {t(language, 'learning.play')}
+                              </button>
+                              <button 
+                                onClick={() => handleRegenerateTrainingAudio(idx)}
+                                className="p-2 h-full bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-all"
+                                title={t(language, 'editor.regenerate')}
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                              </button>
+                            </>
+                          ) : (
+                            <button 
+                              onClick={() => handleRegenerateTrainingAudio(idx)}
+                              className="w-full h-full bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-all flex items-center justify-center gap-2 text-xs font-bold"
+                              title={t(language, 'editor.regenerate')}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                              {t(language, 'editor.regenerate')}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+             </section>
+
+             {/* AI VOICE CONFIGURATION - REMOVED FROM HERE */}
           </div>
         ) : (
           <div className="flex items-center justify-center h-full text-gray-300 italic flex-col gap-4">

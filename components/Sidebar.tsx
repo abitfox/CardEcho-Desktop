@@ -30,7 +30,10 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: AppSection.LIBRARY, label: t(language, 'sidebar.library'), icon: '📚' },
     { id: AppSection.STORE, label: t(language, 'sidebar.store'), icon: '🛒' },
     { id: AppSection.CREATE, label: t(language, 'sidebar.create'), icon: '➕' },
-    ...(hasDecks ? [{ id: AppSection.LEARNING, label: t(language, 'sidebar.learning'), icon: '🎧' }] : []),
+    ...(hasDecks ? [
+      { id: AppSection.LEARNING, label: t(language, 'sidebar.learning'), icon: '🎧' },
+      { id: AppSection.TRAINING, label: t(language, 'sidebar.training'), icon: '🎯' }
+    ] : []),
     { id: AppSection.STATISTICS, label: t(language, 'sidebar.stats'), icon: '📊' },
     { id: AppSection.SETTINGS, label: t(language, 'sidebar.settings'), icon: '⚙️' },
   ];

@@ -6,12 +6,21 @@ export interface WordBreakdown {
   role: string;
 }
 
+export interface TrainingItem {
+  point: string;
+  meaning: string;
+  phonetic: string;
+  role: string;
+  audioUrl?: string;
+}
+
 export interface Card {
   id: string;
   text: string;
   translation: string;
   audioUrl: string; // Base64 or URL
   breakdown: WordBreakdown[];
+  trainingContent?: TrainingItem[]; // 新增：训练模式内容
   context: string;
   grammarNote: string;
   voiceName?: string; // 朗读者姓名
@@ -58,12 +67,28 @@ export type AIModel =
 export enum AppSection {
   LIBRARY = 'library',
   LEARNING = 'learning',
+  TRAINING = 'training',
   STATISTICS = 'statistics',
   SETTINGS = 'settings',
   STORE = 'store',
   CREATE = 'create',
   EDIT = 'edit',
   PROFILE = 'profile'
+}
+
+export interface TrainingChallenge {
+  id: string;
+  type: 'word' | 'phrase' | 'sentence';
+  content: string;
+  audioUrl: string;
+  translation?: string;
+  voiceName?: string;
+}
+
+export interface TrainingSession {
+  deckId: string;
+  challenges: TrainingChallenge[];
+  currentIndex: number;
 }
 
 export enum Modality {

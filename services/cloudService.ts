@@ -1,5 +1,5 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@^2.45.0';
+import { createClient } from '@supabase/supabase-js';
 import { User, Deck, Card } from '../types';
 
 const SUPABASE_URL = (process.env as any).SUPABASE_URL || 'https://zagduqruhmihtdsbrhfo.supabase.co';
@@ -204,7 +204,7 @@ export const cloudService = {
       console.warn("Sorting by updated_at failed, falling back to created_at:", error.message);
       const fallback = await supabase
         .from('store_decks')
-        .select(`id, title, description, icon, source_text, author, user_id, created_at, tags, origin_deck_id, store_cards (*)`)
+        .select(`id, title, description, icon, source_text, author, user_id, created_at, updated_at, tags, origin_deck_id, store_cards (*)`)
         .order('created_at', { ascending: false });
       
       if (fallback.error) throw fallback.error;
@@ -231,6 +231,7 @@ export const cloudService = {
         context: c.context,
         grammarNote: c.grammar_note,
         breakdown: c.breakdown,
+        trainingContent: c.training_content || [],
         voiceName: c.voice_name,
         audioDuration: c.audio_duration,
         repeatCount: c.repeat_count || 3,
@@ -262,6 +263,7 @@ export const cloudService = {
         context: card.context, 
         grammar_note: card.grammarNote, 
         breakdown: card.breakdown, 
+        training_content: card.trainingContent || [],
         voice_name: card.voiceName, 
         audio_duration: card.audioDuration, 
         repeat_count: card.repeatCount || 3,
@@ -291,6 +293,7 @@ export const cloudService = {
         context: card.context, 
         grammar_note: card.grammarNote, 
         breakdown: card.breakdown, 
+        training_content: card.trainingContent || [],
         voice_name: card.voiceName, 
         audio_duration: card.audioDuration, 
         repeat_count: card.repeatCount || 3,
@@ -302,7 +305,9 @@ export const cloudService = {
 
   async saveDeck(deck: Deck, userId: string): Promise<void> {
     const now = new Date().toISOString();
-    await supabase.from('decks').upsert({ 
+    
+    // 1. Update deck metadata
+    const { error: deckError } = await supabase.from('decks').upsert({ 
       id: deck.id, 
       user_id: userId, 
       title: deck.title, 
@@ -314,6 +319,37 @@ export const cloudService = {
       created_at: new Date(deck.createdAt).toISOString(),
       updated_at: now
     });
+
+    if (deckError) {
+      console.error("Error saving deck metadata:", deckError);
+      throw deckError;
+    }
+
+    // 2. Handle card deletions
+    const currentCardIds = deck.cards.map(c => c.id);
+    if (currentCardIds.length > 0) {
+      // Delete cards belonging to this deck that are not in the current list
+      const { error: deleteError } = await supabase.from('cards')
+        .delete()
+        .eq('deck_id', deck.id)
+        .not('id', 'in', `(${currentCardIds.join(',')})`);
+      
+      if (deleteError) {
+        console.error("Error deleting removed cards:", deleteError);
+        // We continue anyway to try and save the current cards
+      }
+    } else {
+      // If the deck is now empty, delete all its cards
+      const { error: deleteError } = await supabase.from('cards')
+        .delete()
+        .eq('deck_id', deck.id);
+      
+      if (deleteError) {
+        console.error("Error deleting all cards for empty deck:", deleteError);
+      }
+    }
+
+    // 3. Upsert current cards
     if (deck.cards.length > 0) {
       const cardsToInsert = deck.cards.map(card => ({ 
         id: card.id, 
@@ -324,12 +360,18 @@ export const cloudService = {
         context: card.context, 
         grammar_note: card.grammarNote, 
         breakdown: card.breakdown, 
+        training_content: card.trainingContent || [],
         voice_name: card.voiceName, 
         audio_duration: card.audioDuration, 
         repeat_count: card.repeatCount || 3,
         is_for_review: card.isForReview || false
       }));
-      await supabase.from('cards').upsert(cardsToInsert as any);
+      
+      const { error: cardsError } = await supabase.from('cards').upsert(cardsToInsert as any);
+      if (cardsError) {
+        console.error("Error upserting cards:", cardsError);
+        throw cardsError;
+      }
     }
   },
 
@@ -356,8 +398,9 @@ export const cloudService = {
         context: c.context,
         grammarNote: c.grammar_note,
         breakdown: c.breakdown,
-        voiceName: c.voice_name,
-        audioDuration: c.audio_duration,
+        trainingContent: c.training_content || [],
+        voiceName: c.voice_name, 
+        audioDuration: c.audio_duration, 
         repeatCount: c.repeat_count || 3,
         isForReview: c.is_for_review || false
       })).sort((a: any, b: any) => a.id.localeCompare(b.id))

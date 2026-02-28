@@ -208,11 +208,11 @@ const Store: React.FC<StoreProps> = ({
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 animate-in fade-in duration-200">
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-md" onClick={() => setEditingStoreDeck(null)}></div>
           <div className="bg-white w-full max-w-xl rounded-[40px] shadow-2xl relative z-10 p-10 flex flex-col animate-in zoom-in-95 duration-300">
-             <h2 className="text-2xl font-bold mb-6">{language === 'zh' ? '商城资源设置' : 'Marketplace Listing Settings'}</h2>
+             <h2 className="text-2xl font-bold mb-6">{t(language, 'store.listingSettings')}</h2>
              <form onSubmit={handleUpdateMetadata} className="space-y-6">
                 <div className="grid grid-cols-4 gap-4">
                    <div className="col-span-1 space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Icon</label>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t(language, 'editor.coverIcon')}</label>
                       <input 
                         type="text" 
                         value={editingStoreDeck.icon} 
@@ -221,7 +221,7 @@ const Store: React.FC<StoreProps> = ({
                       />
                    </div>
                    <div className="col-span-3 space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Title</label>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t(language, 'editor.deckTitle')}</label>
                       <input 
                         type="text" 
                         value={editingStoreDeck.title} 
@@ -231,7 +231,7 @@ const Store: React.FC<StoreProps> = ({
                    </div>
                 </div>
                 <div className="space-y-2">
-                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Description</label>
+                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t(language, 'editor.deckDescription')}</label>
                    <textarea 
                      value={editingStoreDeck.description} 
                      onChange={(e) => setEditingStoreDeck({...editingStoreDeck, description: e.target.value})}
@@ -289,7 +289,7 @@ const Store: React.FC<StoreProps> = ({
 
             {/* Modal Content - Card Preview List */}
             <div className="flex-1 overflow-y-auto p-10 pt-6 space-y-6 custom-scrollbar bg-gray-50/30">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Deck Preview</h3>
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">{t(language, 'store.preview')}</h3>
               <div className="space-y-4">
                 {selectedDeck.cards.map((card, i) => (
                   <div key={card.id} className="p-6 bg-white border border-gray-100 rounded-3xl shadow-sm hover:shadow-md transition-shadow group">
