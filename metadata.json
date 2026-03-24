@@ -1,0 +1,7 @@
+{
+  "name": "CardEcho Desktop",
+  "description": "A professional desktop language learning application featuring AI-powered sentence disassembly, intelligent repeat cycles, and deep learning analysis.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
